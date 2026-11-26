@@ -100,6 +100,42 @@ export interface VerifyReport {
   };
 }
 
+export interface BenchTrialResult {
+  trial: number;
+  passed: boolean;
+  solve_exit_code: number;
+  grade_exit_code: number;
+  solve_duration_ms: number;
+  grade_duration_ms: number;
+  files_changed: number;
+  insertions: number;
+  deletions: number;
+  solve_timed_out: boolean;
+  output_tail: string;
+}
+
+export interface BenchAgentSummary {
+  agent: string;
+  passed: number;
+  trials: number;
+  pass_rate: number;
+  avg_solve_ms: number;
+  avg_insertions: number;
+  avg_deletions: number;
+  results: BenchTrialResult[];
+}
+
+export interface BenchReport {
+  spec_version: string;
+  id: string;
+  benchmarked_at: string;
+  bundle_sha256: string;
+  grade_sandbox: SandboxMode;
+  network_isolated_grading: boolean;
+  trials_per_agent: number;
+  agents: BenchAgentSummary[];
+}
+
 export interface BlindCard {
   spec_version: string;
   id: string;
@@ -116,6 +152,18 @@ export interface BlindCard {
     network_isolated: boolean;
     gold_pass_rate: string;
     verified_at: string | null;
+  };
+  benchmark?: {
+    benchmarked_at: string;
+    grade_sandbox: SandboxMode;
+    trials_per_agent: number;
+    results: Array<{
+      agent: string;
+      passed: number;
+      trials: number;
+      pass_rate: number;
+      avg_solve_ms: number;
+    }>;
   };
   ownership: {
     author_attestation: boolean;

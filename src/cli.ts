@@ -5,11 +5,12 @@ import { runMine } from "./commands/mine.js";
 import { runInit } from "./commands/init.js";
 import { runAudit } from "./commands/audit.js";
 import { runVerify } from "./commands/verify.js";
+import { runBench } from "./commands/bench.js";
 import { runPack } from "./commands/pack.js";
 import { runInstallSkill } from "./commands/install-skill.js";
 import { c, printFail } from "./utils/format.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 function printHelp(): void {
   console.log(`
@@ -24,6 +25,7 @@ ${c.bold("COMMANDS")}
   ${c.cyan("init")}           Snapshot a git commit range into a clean, isolated eval bundle
   ${c.cyan("audit")}          Scan a bundle for secrets, PII, git-history leaks, and prompt leaks
   ${c.cyan("verify")}         Run deterministic base-fail + 3x gold-pass verification (Docker offline or local)
+  ${c.cyan("bench")}          Benchmark coding agents (claude, codex, gemini, custom) on a bundle
   ${c.cyan("pack")}           Validate, attest IP ownership, generate blind scorecard (card.json) + .tar.gz
 
 ${c.bold("EXAMPLES")}
@@ -32,6 +34,7 @@ ${c.bold("EXAMPLES")}
   evalkit init --repo ./my-indie-app --from HEAD~1 --to HEAD --out ./evals/webhook-race
   evalkit audit ./evals/webhook-race
   evalkit verify ./evals/webhook-race --runs 3
+  evalkit bench ./evals/webhook-race --agents claude,codex,gemini --trials 3
   evalkit pack ./evals/webhook-race --attest-ip --license private-vault
 
 Run ${c.dim("evalkit <command> --help")} for command-specific flags.
@@ -44,11 +47,13 @@ function main(): void {
 
   if (!cmd || cmd === "-h" || cmd === "--help") {
     printHelp();
-    process.exit(0);
+    process.exitCode = 0;
+    return;
   }
   if (cmd === "-v" || cmd === "--version") {
     console.log(VERSION);
-    process.exit(0);
+    process.exitCode = 0;
+    return;
   }
 
   const subArgs = argv.slice(1);
@@ -73,7 +78,8 @@ function main(): void {
           console.log(
             "Usage: evalkit mine [repo-path] [--repo <path>] [--limit 100] [--top 8] [--json]"
           );
-          process.exit(0);
+          process.exitCode = 0;
+          return;
         }
         exitCode = runMine({
           repo: values.repo ?? positionals[0] ?? ".",
@@ -104,7 +110,8 @@ function main(): void {
           console.log(
             "Usage: evalkit init [repo-path] [--from HEAD~1] [--to HEAD] [--out <dir>] [--id <slug>] [--category bugfix|feature|refactor|migration|perf] [--no-extract-tests] [--force]"
           );
-          process.exit(0);
+          process.exitCode = 0;
+          return;
         }
         const validCategories: TaskCategory[] = [
           "bugfix",
@@ -142,7 +149,8 @@ function main(): void {
         });
         if (values.help || !positionals[0]) {
           console.log("Usage: evalkit audit <bundle-dir> [--strict] [--json]");
-          process.exit(values.help ? 0 : 1);
+          process.exitCode = values.help ? 0 : 1;
+          return;
         }
         exitCode = runAudit({
           bundleDir: positionals[0],
@@ -169,7 +177,8 @@ function main(): void {
           console.log(
             "Usage: evalkit verify <bundle-dir> [--mode auto|docker|local] [--runs 3] [--timeout 180] [--keep-image] [--json]"
           );
-          process.exit(values.help ? 0 : 1);
+          process.exitCode = values.help ? 0 : 1;
+          return;
         }
         const mode =
           values.mode === "docker" || values.mode === "local" ? values.mode : "auto";
@@ -179,6 +188,55 @@ function main(): void {
           runs: values.runs ? Number.parseInt(values.runs, 10) : undefined,
           timeoutSec: values.timeout ? Number.parseInt(values.timeout, 10) : undefined,
           keepImage: values["keep-image"],
+          json: values.json,
+        });
+        break;
+      }
+
+      case "bench": {
+        const { values, positionals } = parseArgs({
+          args: subArgs,
+          allowPositionals: true,
+          options: {
+            agents: { type: "string", short: "a" },
+            cmd: { type: "string", multiple: true },
+            trials: { type: "string", short: "k", default: "1" },
+            "grade-mode": { type: "string", default: "auto" },
+            "solve-timeout": { type: "string" },
+            "verify-timeout": { type: "string" },
+            json: { type: "boolean", default: false },
+            help: { type: "boolean", short: "h", default: false },
+          },
+        });
+        if (values.help || !positionals[0]) {
+          console.log(
+            'Usage: evalkit bench <bundle-dir> [--agents claude,codex,gemini,opencode,oracle,noop] [--cmd "label=command"]... [--trials 3] [--grade-mode auto|docker|local] [--solve-timeout 600] [--verify-timeout 180] [--json]'
+          );
+          process.exitCode = values.help ? 0 : 1;
+          return;
+        }
+        const agents = values.agents
+          ? values.agents
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+        const gradeMode =
+          values["grade-mode"] === "docker" || values["grade-mode"] === "local"
+            ? values["grade-mode"]
+            : "auto";
+        exitCode = runBench({
+          bundleDir: positionals[0],
+          agents,
+          customCmds: values.cmd ?? [],
+          trials: Number.parseInt(values.trials, 10) || 1,
+          gradeMode,
+          solveTimeoutSec: values["solve-timeout"]
+            ? Number.parseInt(values["solve-timeout"], 10)
+            : undefined,
+          verifyTimeoutSec: values["verify-timeout"]
+            ? Number.parseInt(values["verify-timeout"], 10)
+            : undefined,
           json: values.json,
         });
         break;
@@ -201,7 +259,8 @@ function main(): void {
           console.log(
             "Usage: evalkit pack <bundle-dir> [--out <archive.tar.gz>] [--attest-ip] [--license private-vault|mit|apache-2.0] [--skip-verify] [--json]"
           );
-          process.exit(values.help ? 0 : 1);
+          process.exitCode = values.help ? 0 : 1;
+          return;
         }
         const license =
           values.license === "private-vault" ||
@@ -234,7 +293,8 @@ function main(): void {
           console.log(
             "Usage: evalkit install-skill [--target auto|antigravity|claude|cursor|codex|all|<path>] [--project]"
           );
-          process.exit(0);
+          process.exitCode = 0;
+          return;
         }
         exitCode = runInstallSkill({
           target: values.target,
@@ -250,10 +310,10 @@ function main(): void {
       }
     }
 
-    process.exit(exitCode);
+    process.exitCode = exitCode;
   } catch (err) {
     printFail((err as Error).message || String(err));
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 

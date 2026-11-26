@@ -323,12 +323,40 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     assert.equal(verifyJson.gold_checks.runs_passed, 3);
     assert.equal(verifyJson.gold_checks.all_passed, true);
 
-    // 5. PACK without --attest-ip must be blocked
+    // 5. BENCH across noop, oracle, and a custom --cmd adapter (2 trials each)
+    const benchRes = runCli([
+      "bench",
+      bundleDir,
+      "--agents",
+      "noop,oracle",
+      "--cmd",
+      "naive-bot=printf '\\n// naive attempt\\n' >> src/webhooks.mjs",
+      "--trials",
+      "2",
+      "--grade-mode",
+      "local",
+      "--json",
+    ]);
+    assert.equal(benchRes.status, 0, `${benchRes.stdout}\n${benchRes.stderr}`);
+    const benchJson = JSON.parse(benchRes.stdout);
+    assert.equal(benchJson.trials_per_agent, 2);
+    assert.equal(benchJson.agents.length, 3);
+    const noopSummary = benchJson.agents.find((a: { agent: string }) => a.agent === "noop");
+    const oracleSummary = benchJson.agents.find((a: { agent: string }) => a.agent === "oracle");
+    const naiveSummary = benchJson.agents.find((a: { agent: string }) => a.agent === "naive-bot");
+    assert.equal(noopSummary.passed, 0);
+    assert.equal(noopSummary.pass_rate, 0);
+    assert.equal(oracleSummary.passed, 2);
+    assert.equal(oracleSummary.pass_rate, 1);
+    assert.equal(naiveSummary.passed, 0);
+    assert.ok(naiveSummary.avg_insertions >= 1);
+
+    // 6. PACK without --attest-ip must be blocked
     const packNoAttest = runCli(["pack", bundleDir, "--json"]);
     assert.equal(packNoAttest.status, 1);
     assert.equal(JSON.parse(packNoAttest.stdout).reason, "missing_ip_attestation");
 
-    // 6. PACK with --attest-ip must succeed without breaking verify checksum
+    // 7. PACK with --attest-ip must succeed without breaking verify checksum and embed benchmark scores
     const packRes = runCli([
       "pack",
       bundleDir,
@@ -345,8 +373,14 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     assert.equal(packJson.card.verification.verified, true);
     assert.equal(packJson.card.verification.gold_pass_rate, "3/3");
     assert.equal(packJson.card.ownership.author_attestation, true);
+    assert.ok(packJson.card.benchmark);
+    assert.equal(packJson.card.benchmark.results.length, 3);
+    assert.equal(
+      packJson.card.benchmark.results.find((r: { agent: string }) => r.agent === "oracle").passed,
+      2
+    );
 
-    // 7. INSTALL-SKILL to a custom directory
+    // 8. INSTALL-SKILL to a custom directory
     const skillRes = runCli(["install-skill", "--target", skillInstallDir]);
     assert.equal(skillRes.status, 0, skillRes.stderr);
     assert.equal(fs.existsSync(path.join(skillInstallDir, "SKILL.md")), true);

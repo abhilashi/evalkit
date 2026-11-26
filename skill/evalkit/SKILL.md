@@ -72,9 +72,18 @@ evalkit verify ./evals/<slug> --runs 3
 * If Docker isn't running locally, inform the user and offer `--mode local` for quick iteration — while reminding them to run full Docker `--network=none` verification before packing for submission.
 * Do not stop until `base_check` **fails cleanly** and `gold_checks` **pass 3/3**.
 
-### Step 8: Pack & Generate Blind Scorecard
+### Step 8: Benchmark Frontier Agents (Optional but High-Signal)
+If the user wants to test whether frontier models actually fail on this task (and stamp difficulty onto `card.json`):
+```bash
+evalkit bench ./evals/<slug> --agents claude,codex,gemini --trials 3
+# or sanity-check the bench harness without spending tokens:
+evalkit bench ./evals/<slug> --agents noop,oracle --trials 1
+```
+Bench results are saved to `private/bench-report.json` and automatically embedded into `card.json` when packing.
+
+### Step 9: Pack & Generate Blind Scorecard
 Once `audit` and `verify` both pass, confirm with the user that they own the IP / have rights to license the code, then run:
 ```bash
 evalkit pack ./evals/<slug> --attest-ip --license private-vault
 ```
-Show the user the generated `card.json` (the blind scorecard containing only stack, complexity, verification status, and SHA-256 — safe to share publicly without leaking code or prompt) and the path to the `.evalkit.tar.gz` archive.
+Show the user the generated `card.json` (the blind scorecard containing only stack, complexity, verification status, optional frontier benchmark pass rates, and SHA-256 — safe to share publicly without leaking code or prompt) and the path to the `.evalkit.tar.gz` archive.

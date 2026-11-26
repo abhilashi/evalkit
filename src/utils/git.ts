@@ -343,9 +343,10 @@ export function computeBundleSha256(bundleDir: string): string {
   const files: Array<{ absPath: string; relPath: string }> = [];
 
   walkFiles(bundleDir, (absPath, relPath) => {
-    // Exclude ephemeral verification reports and generated cards from content hash
+    // Exclude ephemeral verification/benchmark reports and generated cards from content hash
     if (
       relPath === path.join("private", "verify-report.json") ||
+      relPath === path.join("private", "bench-report.json") ||
       relPath === "card.json" ||
       relPath.endsWith(".tar.gz")
     ) {

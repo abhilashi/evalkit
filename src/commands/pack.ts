@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import type { BlindCard, EvalConfig, VerifyReport } from "../types.js";
+import type { BenchReport, BlindCard, EvalConfig, VerifyReport } from "../types.js";
 import { auditBundle } from "./audit.js";
 import { computeBundleSha256 } from "../utils/git.js";
 import { execSyncSafe } from "../utils/exec.js";
@@ -113,7 +113,35 @@ export function runPack(options: PackOptions): number {
     );
   }
 
-  // 4. Write Blind Scorecard (card.json) — safe to share publicly without leaking code or prompt
+  // 4. Attach fresh benchmark scorecard if private/bench-report.json matches bundle checksum
+  const benchReportPath = path.join(bundleDir, "private", "bench-report.json");
+  let benchmarkSection: BlindCard["benchmark"] | undefined;
+  if (fs.existsSync(benchReportPath)) {
+    try {
+      const bench = JSON.parse(fs.readFileSync(benchReportPath, "utf8")) as BenchReport;
+      if (bench.bundle_sha256 === currentSha) {
+        benchmarkSection = {
+          benchmarked_at: bench.benchmarked_at,
+          grade_sandbox: bench.grade_sandbox,
+          trials_per_agent: bench.trials_per_agent,
+          results: bench.agents.map((a) => ({
+            agent: a.agent,
+            passed: a.passed,
+            trials: a.trials,
+            pass_rate: a.pass_rate,
+            avg_solve_ms: a.avg_solve_ms,
+          })),
+        };
+        if (!options.json) {
+          printPass(`Embedded benchmark scores for ${bench.agents.length} agent(s) into card.json`);
+        }
+      }
+    } catch {
+      // Ignore malformed bench report
+    }
+  }
+
+  // 5. Write Blind Scorecard (card.json) — safe to share publicly without leaking code or prompt
   const card: BlindCard = {
     spec_version: config.spec_version,
     id: config.id,
@@ -134,6 +162,7 @@ export function runPack(options: PackOptions): number {
           : "0/0",
       verified_at: verifyValid && verifyReport ? verifyReport.verified_at : null,
     },
+    ...(benchmarkSection ? { benchmark: benchmarkSection } : {}),
     ownership: {
       author_attestation: config.ownership.author_attestation,
       license: config.ownership.license,
