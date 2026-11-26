@@ -1,0 +1,40 @@
+{
+  "name": "evalkit",
+  "version": "0.1.0",
+  "description": "Turn real-world bugs and agent failure states in any git repo into reproducible, verifiable eval environments.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "evalkit": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skill",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/cli.js",
+    "test": "npm run build && tsc -p tsconfig.test.json && node --test dist-test/e2e.test.js",
+    "clean": "rm -rf dist dist-test"
+  },
+  "keywords": [
+    "ai",
+    "evals",
+    "benchmarks",
+    "rl-environments",
+    "coding-agents",
+    "agent-skill",
+    "swe-bench"
+  ],
+  "dependencies": {
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}
