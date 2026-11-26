@@ -1,6 +1,6 @@
 {
   "name": "evalkit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Turn real-world bugs and AI agent failure states in any git repo into reproducible, verified eval environments.",
   "type": "module",
   "license": "MIT",

@@ -1,0 +1,43 @@
+{
+  "spec_version": "0.1",
+  "id": "jwt-session-rotation-race",
+  "verified_at": "2026-11-26T21:55:06.135Z",
+  "sandbox": "local",
+  "network_isolated": false,
+  "bundle_sha256": "f91561c2e52ec67192432565ef2d8d7c09633fad9420656fc895db711c1a941b",
+  "passed": true,
+  "base_check": {
+    "failed_as_expected": true,
+    "exit_code": 1,
+    "duration_ms": 162,
+    "output_tail": "    expected: false,\n    operator: 'strictEqual'\n  }\n\ntest at test/rotation-race.test.mjs:21:1\n✖ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.119042ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-verify-LVAUy5/base/test/rotation-race.test.mjs:28:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3)\n\ntest at test/rotation-race.test.mjs:35:1\n✖ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.1005ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-verify-LVAUy5/base/test/rotation-race.test.mjs:43:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+  },
+  "gold_checks": {
+    "runs_requested": 3,
+    "runs_passed": 3,
+    "all_passed": true,
+    "results": [
+      {
+        "run": 1,
+        "passed": true,
+        "exitCode": 0,
+        "durationMs": 133,
+        "outputTail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.44475ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.44425ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.1025ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.091708ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.407584"
+      },
+      {
+        "run": 2,
+        "passed": true,
+        "exitCode": 0,
+        "durationMs": 134,
+        "outputTail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.442208ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.457167ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.102ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.093625ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 38.080792"
+      },
+      {
+        "run": 3,
+        "passed": true,
+        "exitCode": 0,
+        "durationMs": 133,
+        "outputTail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.484708ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.587042ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.114292ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.102458ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 39.136333"
+      }
+    ]
+  }
+}

@@ -87,3 +87,16 @@ Once `audit` and `verify` both pass, confirm with the user that they own the IP 
 evalkit pack ./evals/<slug> --attest-ip --license private-vault
 ```
 Show the user the generated `card.json` (the blind scorecard containing only stack, complexity, verification status, optional frontier benchmark pass rates, and SHA-256 — safe to share publicly without leaking code or prompt) and the path to the `.evalkit.tar.gz` archive.
+
+### Step 10: Optional Private Vault Submission
+If the user wants to share their blind scorecard or submit to a vault endpoint:
+```bash
+# Always preview first so the developer sees exact payload:
+evalkit submit ./evals/<slug> --dry-run
+
+# Submit blind card.json ONLY (never exposes source code):
+evalkit submit ./evals/<slug> --github-issue
+
+# Or submit to a configured Private Vault HTTPS endpoint:
+evalkit submit ./evals/<slug> --endpoint "$EVALKIT_VAULT_URL"
+```

@@ -1,0 +1,91 @@
+diff --git a/src/sessions.mjs b/src/sessions.mjs
+index 1714c12..90699ff 100644
+--- a/src/sessions.mjs
++++ b/src/sessions.mjs
+@@ -2,6 +2,7 @@ import crypto from "node:crypto";
+ 
+ export function createSessionManager({ graceWindowMs = 5000 } = {}) {
+   const tokens = new Map();
++  const revokedFamilies = new Set();
+ 
+   function issue(userId, now = Date.now()) {
+     const familyId = crypto.randomUUID();
+@@ -10,7 +11,8 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {
+       token,
+       userId,
+       familyId,
+-      used: false,
++      rotatedAt: null,
++      replacedBy: null,
+       createdAt: now,
+     });
+     return { token, familyId, userId };
+@@ -21,25 +23,61 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {
+     if (!record) {
+       throw new Error("Invalid refresh token");
+     }
+-    if (record.used) {
+-      throw new Error("Refresh token already used");
++    if (revokedFamilies.has(record.familyId)) {
++      throw new Error("Session family has been revoked");
+     }
+-    record.used = true;
++
++    if (record.rotatedAt !== null && record.replacedBy) {
++      const child = tokens.get(record.replacedBy);
++      const elapsed = now - record.rotatedAt;
++      const withinGrace = elapsed >= 0 && elapsed <= graceWindowMs;
++      const childIsStillHead = Boolean(child && child.rotatedAt === null);
++
++      if (withinGrace && childIsStillHead) {
++        return {
++          token: child.token,
++          familyId: record.familyId,
++          userId: record.userId,
++          replayedWithinGrace: true,
++        };
++      }
++
++      // Replay outside grace window or stale ancestor -> token theft detected: revoke entire family
++      revokedFamilies.add(record.familyId);
++      throw new Error("Refresh token reuse detected; session family revoked");
++    }
++
+     const nextToken = crypto.randomUUID();
++    record.rotatedAt = now;
++    record.replacedBy = nextToken;
++
+     tokens.set(nextToken, {
+       token: nextToken,
+       userId: record.userId,
+       familyId: record.familyId,
+-      used: false,
++      rotatedAt: null,
++      replacedBy: null,
+       createdAt: now,
+     });
+-    return { token: nextToken, familyId: record.familyId, userId: record.userId };
++
++    return {
++      token: nextToken,
++      familyId: record.familyId,
++      userId: record.userId,
++      replayedWithinGrace: false,
++    };
+   }
+ 
+   function isActive(refreshToken) {
+     const record = tokens.get(refreshToken);
+-    return Boolean(record && !record.used);
++    if (!record) return false;
++    if (revokedFamilies.has(record.familyId)) return false;
++    return record.rotatedAt === null;
++  }
++
++  function isFamilyRevoked(familyId) {
++    return revokedFamilies.has(familyId);
+   }
+ 
+-  return { issue, rotate, isActive, graceWindowMs };
++  return { issue, rotate, isActive, isFamilyRevoked, graceWindowMs };
+ }

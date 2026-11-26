@@ -1,13 +1,16 @@
 # evalkit
 
 [![CI](https://github.com/abhilashi/evalkit/actions/workflows/ci.yml/badge.svg)](https://github.com/abhilashi/evalkit/actions/workflows/ci.yml)
+[![Leaderboard](https://img.shields.io/badge/Leaderboard-GitHub%20Pages-38bdf8)](https://abhilashi.github.io/evalkit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Turn real-world bugs and AI agent failure states in any git repo into reproducible, verified eval environments.**
 
-When AI generates most of the code, **the frontier failure boundary is the dataset**: the exact moments where coding agents loop, break regressions, or fail on messy full-stack apps and a developer has to step in.
+When AI generates most of the code, **the frontier failure boundary is the dataset**: the exact moments where coding agents loop, break regressions, or fail on messy real-world apps and a developer has to step in.
 
-`evalkit` pairs an **open-source CLI** with a **universal Agent Skill (`SKILL.md`)** so any developer can package a real commit range — live right after fixing a gnarly bug, or mined from a side-project graveyard — into an offline-reproducible, leak-free, 3x-verified eval bundle and benchmark coding agents against it in minutes.
+`evalkit` pairs an **open-source CLI** with a **universal Agent Skill (`SKILL.md`)** so any developer can package a real commit range — live right after fixing a gnarly bug, or mined from a side-project graveyard — into an offline-reproducible, leak-free, 3x-verified eval bundle, benchmark coding agents against it, publish a static leaderboard, or submit a blind scorecard to the Private Vault.
+
+👉 **Live Teaser Leaderboard:** https://abhilashi.github.io/evalkit/
 
 ---
 
@@ -31,14 +34,21 @@ Then open your coding agent in any git repo and say:
 
 ---
 
-## Why `evalkit`?
+## Included Showcase Evals (`examples/`)
 
-- **Built for real messy repos** — TypeScript, Next.js, Postgres, Playwright, Python, Go, Rust (not just toy algorithms).
-- **Split architecture:** Your AI coding agent handles judgment work (mining commits, drafting a leak-free prompt, authoring missing tests, capturing your 90-second debrief); the deterministic CLI enforces hard mechanical guarantees.
-- **Zero-leak snapshotting:** Exports `base_commit` via `git archive` into a fresh single-commit repo so evaluated agents can never run `git log` to read `fix_commit` or deleted secrets.
-- **Offline determinism:** Verifies inside Docker with `--network=none` that `base_commit` fails cleanly and `gold.patch` passes 3/3 times with zero flakiness.
-- **Built-in multi-agent benchmarking (`evalkit bench`):** Pit `claude`, `codex`, `gemini`, `opencode`, or any custom CLI agent against your own real bugs and print a shareable scorecard.
-- **Blind Scorecard (`card.json`):** Exports a shareable metadata card (stack, diff complexity, verification proof, frontier pass rates, SHA-256) without leaking your code or prompt.
+Every example bundle in [`examples/`](examples/) is audited (`--strict`), verified (`base` fails, `gold.patch` passes 3/3), and automatically validated on every CI run:
+
+| Eval Task | Stack | What Trips Up Agents |
+| :--- | :--- | :--- |
+| [`stripe-webhook-idempotency`](examples/stripe-webhook-idempotency) | `node`, `javascript`, `stripe`, `billing` | Per-ledger dedupe isolation + per-charge partial refund caps without poisoning state on rejected payloads |
+| [`jwt-session-rotation-race`](examples/jwt-session-rotation-race) | `node`, `javascript`, `auth`, `security` | Concurrent multi-tab refresh grace window vs. 2-hop ancestor replay triggering family-wide theft revocation |
+| [`rate-limiter-sliding-window`](examples/rate-limiter-sliding-window) | `node`, `javascript`, `api`, `rate-limiting` | 2× fixed-window boundary bursts, exact `retryAfterMs`, clock jitter ordering, and bounded idle-key eviction |
+
+Run your own coding agents against any included example:
+
+```bash
+evalkit bench ./examples/jwt-session-rotation-race --agents claude,codex,gemini --trials 3
+```
 
 ---
 
@@ -52,30 +62,26 @@ evalkit mine --repo ./my-indie-app --top 8
 ```
 
 ### 2. Initialize a clean eval bundle
-Snapshots `base_commit`, strips `.env*` & keys, detects stack, extracts changed tests into `grading/tests/`, and scaffolds the full bundle:
+Snapshots `base_commit` via `git archive` (zero future-commit leaks, strips `.env*` & keys), detects stack, extracts changed tests into `grading/tests/`, and scaffolds the full bundle:
 
 ```bash
 evalkit init --repo ./my-indie-app --from HEAD~1 --to HEAD --out ./evals/webhook-race
 ```
 
 ### 3. Audit for secrets, PII, git leaks, and prompt leaks
-Scans every text file with built-in secret/entropy rules, checks git history squashing, and catches unfilled placeholders or copied diff lines in `prompt.md`:
-
 ```bash
-evalkit audit ./evals/webhook-race
+evalkit audit ./evals/webhook-race --strict
 ```
 
 ### 4. Verify determinism (base fails + gold passes 3/3)
-Runs the verification oracle inside an offline Docker container (`--network=none`), or in a temporary local sandbox (`--mode local`) while iterating:
-
 ```bash
 evalkit verify ./evals/webhook-race --runs 3
-# or without Docker running during fast local iteration:
+# or fast local iteration without Docker running:
 evalkit verify ./evals/webhook-race --mode local --runs 3
 ```
 
 ### 5. Benchmark coding agents on your task
-Run installed coding agents (or any custom command) inside an isolated copy of `base_commit` — with `grading/` and `private/` strictly hidden — then grade every agent's produced patch offline:
+Run installed coding agents (or any custom command) inside an isolated copy of `base_commit` — with `grading/` and `private/` strictly hidden — then grade every produced patch offline:
 
 ```bash
 # Built-in adapters: claude, codex, gemini, opencode, oracle, noop
@@ -87,25 +93,39 @@ evalkit bench ./evals/webhook-race \
   --agents oracle,noop
 ```
 
-Example scorecard output:
-
-```text
-▸ evalkit bench — webhook-race (node, typescript, stripe) [docker-offline]
-
-  Agent           Pass Rate       Avg Solve   Avg Diff      Status
-  ──────────────────────────────────────────────────────────────────
-  noop            0/3 (0%)        0ms         +0 / -0       FAIL
-  claude          0/3 (0%)        41.2s       +19 / -4      FAIL
-  codex           1/3 (33%)       36.8s       +24 / -6      PARTIAL
-  oracle          3/3 (100%)      12ms        +28 / -5      PASS
-```
-
-### 6. Pack into a vault-ready archive + Blind Scorecard
-Enforces `audit` + fresh verification checksum + IP ownership attestation, automatically embeds matching benchmark results into `card.json`, and outputs `<id>.evalkit.tar.gz`:
+### 6. Pack into a vault-ready archive + Blind Scorecard (`card.json`)
+Enforces `audit` + fresh verification checksum + IP ownership attestation, automatically embeds matching benchmark scores into `card.json`, and outputs `<id>.evalkit.tar.gz`:
 
 ```bash
 evalkit pack ./evals/webhook-race --attest-ip --license private-vault
 ```
+
+### 7. Generate a static leaderboard (`docs/`)
+Aggregates all `card.json` files in a directory into a standalone HTML + JSON leaderboard ready for GitHub Pages:
+
+```bash
+evalkit leaderboard ./examples --out ./docs
+```
+
+### 8. Submit to the Private Vault (blind card or full bundle)
+Preview what leaves your machine (`--dry-run`), submit a **blind `card.json` only** via GitHub Issues (`--github-issue`, zero source code exposed), or push to a Private Vault HTTPS endpoint (`--endpoint` / `EVALKIT_VAULT_URL`):
+
+```bash
+# Dry-run preview (prints exact blind scorecard payload)
+evalkit submit ./evals/webhook-race --dry-run
+
+# Zero-infra blind scorecard submission (keeps code 100% private on your machine)
+evalkit submit ./evals/webhook-race --github-issue
+
+# Push to a Private Vault Worker endpoint (see vault-worker/)
+evalkit submit ./evals/webhook-race --endpoint https://<your-worker>/submit --full-bundle
+```
+
+---
+
+## Deploy Your Own Private Vault Intake (`vault-worker/`)
+
+A minimal Cloudflare Worker + R2 intake endpoint ships in [`vault-worker/`](vault-worker/) so you can collect verified blind cards and private `.evalkit.tar.gz` bundles in 2 minutes with `npx wrangler deploy`.
 
 ---
 
@@ -118,7 +138,7 @@ evalkit pack ./evals/webhook-race --attest-ip --license private-vault
 ├── card.json              # Generated Blind Scorecard (safe to share publicly)
 ├── environment/
 │   ├── Dockerfile         # Reproducible offline image pinned at base_commit
-│   ├── repo/              # Clean single-commit snapshot at base_commit
+│   ├── repo/              # Clean snapshot at base_commit (zero future git leaks)
 │   └── mocks/             # Offline stubs/fixtures for external APIs
 ├── grading/               # NEVER mounted during solve; injected read-only at grade time
 │   ├── verify.sh          # Executable entrypoint (exit 0 = pass, non-zero = fail)
@@ -134,11 +154,11 @@ evalkit pack ./evals/webhook-race --attest-ip --license private-vault
 
 ---
 
-## Roadmap: Open Tool → Private Vault
+## Roadmap Status
 
-1. **v0.1 (Shipped):** Universal Agent Skill + CLI + Open Bundle Spec + secret/leak auditing + Docker `--network=none` deterministic verification.
-2. **v0.2 (Shipped):** `evalkit bench` multi-agent runner (`claude`, `codex`, `gemini`, `opencode`, `--cmd`), benchmark scores embedded in `card.json`, CI, and 1-command `npx` install.
-3. **v0.3 (Next):** Curated open-source teaser benchmark (25–50 real indie full-stack tasks + public leaderboard) & opt-in `evalkit submit --vault` for private held-out licensing and developer bounties.
+- **v0.1 (Shipped):** Universal Agent Skill + CLI + Open Bundle Spec + secret/leak auditing + offline Docker/local verification + Blind Scorecard (`card.json`).
+- **v0.2 (Shipped):** `evalkit bench` multi-agent runner (`claude`, `codex`, `gemini`, `opencode`, `--cmd`), auto-embedded benchmark scores in `card.json`, GitHub Actions CI, and 1-command `npx` install.
+- **v0.3 (Shipped):** Verified showcase evals (`examples/`), `evalkit leaderboard` static GitHub Pages generator (`docs/`), `evalkit submit` (dry-run, `--github-issue` blind card, HTTPS vault API), and deployable Cloudflare Worker intake (`vault-worker/`).
 
 ---
 

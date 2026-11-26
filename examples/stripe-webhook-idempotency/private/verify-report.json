@@ -1,0 +1,43 @@
+{
+  "spec_version": "0.1",
+  "id": "stripe-webhook-idempotency",
+  "verified_at": "2026-11-26T21:55:07.729Z",
+  "sandbox": "local",
+  "network_isolated": false,
+  "bundle_sha256": "87ebf22f4b4b3d2099305493fde578ad267cd11745008cef03907bec36f886d5",
+  "passed": true,
+  "base_check": {
+    "failed_as_expected": true,
+    "exit_code": 1,
+    "duration_ms": 142,
+    "output_tail": "      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { applied: true, duplicate: false, balance: 10000 },\n    expected: { applied: false, duplicate: true, balance: 5000 },\n    operator: 'deepStrictEqual'\n  }\n\ntest at test/idempotency.test.mjs:55:1\n✖ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.123ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-verify-4CFWtw/base/test/idempotency.test.mjs:75:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws'\n  }"
+  },
+  "gold_checks": {
+    "runs_requested": 3,
+    "runs_passed": 3,
+    "all_passed": true,
+    "results": [
+      {
+        "run": 1,
+        "passed": true,
+        "exitCode": 0,
+        "durationMs": 134,
+        "outputTail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.324041ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.692666ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.142791ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.642667"
+      },
+      {
+        "run": 2,
+        "passed": true,
+        "exitCode": 0,
+        "durationMs": 135,
+        "outputTail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.322417ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.680417ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.142458ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.134875"
+      },
+      {
+        "run": 3,
+        "passed": true,
+        "exitCode": 0,
+        "durationMs": 135,
+        "outputTail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.36975ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.811833ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.153916ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.645458"
+      }
+    ]
+  }
+}

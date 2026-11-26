@@ -1,0 +1,34 @@
+{
+  "id": "stripe-webhook-idempotency",
+  "source_repo_name": "evalkit-ex-stripe-webhook-idempotency-5fyJCl",
+  "base_commit": "e2fece7c4768c62ffb039a100563cd9f3d731677",
+  "fix_commit": "c53fe4629a65ce40dcb79e835c84497a92347385",
+  "commit_subject": "fix: enforce webhook idempotency and capped refund reconciliation",
+  "code_files": [
+    "src/ledger.mjs",
+    "src/webhooks.mjs"
+  ],
+  "test_files": [
+    "test/idempotency.test.mjs"
+  ],
+  "extracted_test_files": [
+    "test/idempotency.test.mjs"
+  ],
+  "stack": {
+    "primary": "node",
+    "tags": [
+      "node",
+      "javascript"
+    ],
+    "packageManager": "npm",
+    "hasPlaywright": false,
+    "hasVitest": false,
+    "hasJest": false,
+    "hasNextJs": false,
+    "hasPostgresHint": false,
+    "externalServices": [
+      "stripe"
+    ],
+    "defaultTestCommand": "npm test"
+  }
+}

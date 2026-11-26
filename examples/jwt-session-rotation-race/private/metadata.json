@@ -1,0 +1,31 @@
+{
+  "id": "jwt-session-rotation-race",
+  "source_repo_name": "evalkit-ex-jwt-session-rotation-race-i3uTh2",
+  "base_commit": "521fd5de0eed79dcd787378a7aca74b7cdc55567",
+  "fix_commit": "10add41fd7f70f453061fa69da72d5a512a32b2b",
+  "commit_subject": "fix: add concurrent refresh grace window and family-wide theft revocation",
+  "code_files": [
+    "src/sessions.mjs"
+  ],
+  "test_files": [
+    "test/rotation-race.test.mjs"
+  ],
+  "extracted_test_files": [
+    "test/rotation-race.test.mjs"
+  ],
+  "stack": {
+    "primary": "node",
+    "tags": [
+      "node",
+      "javascript"
+    ],
+    "packageManager": "npm",
+    "hasPlaywright": false,
+    "hasVitest": false,
+    "hasJest": false,
+    "hasNextJs": false,
+    "hasPostgresHint": false,
+    "externalServices": [],
+    "defaultTestCommand": "npm test"
+  }
+}

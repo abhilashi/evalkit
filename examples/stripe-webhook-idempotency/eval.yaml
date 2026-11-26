@@ -1,0 +1,26 @@
+spec_version: "0.1"
+id: stripe-webhook-idempotency
+title: "fix: enforce webhook idempotency and capped refund reconciliation"
+stack:
+  - node
+  - javascript
+  - stripe
+  - billing
+category: bugfix
+source:
+  base_commit: e2fece7c4768c62ffb039a100563cd9f3d731677
+  fix_commit: c53fe4629a65ce40dcb79e835c84497a92347385
+  captured_at: 2026-11-26T21:11:05.640Z
+  files_changed: 3
+  insertions: 164
+  deletions: 6
+timeouts:
+  solve_sec: 1200
+  verify_sec: 180
+grading:
+  type: deterministic
+  network_access: false
+  flakiness_runs: 3
+ownership:
+  author_attestation: true
+  license: mit

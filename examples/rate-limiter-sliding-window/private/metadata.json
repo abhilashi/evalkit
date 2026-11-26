@@ -1,0 +1,31 @@
+{
+  "id": "rate-limiter-sliding-window",
+  "source_repo_name": "evalkit-ex-rate-limiter-sliding-window-OZOojx",
+  "base_commit": "3d53dc49b5b5101180b407d0ccfb88eed376b69f",
+  "fix_commit": "9cb0230fab02730f0df346c29d35c3a4b463e8ce",
+  "commit_subject": "fix: switch to sliding-window log with exact retryAfterMs and idle bucket eviction",
+  "code_files": [
+    "src/limiter.mjs"
+  ],
+  "test_files": [
+    "test/sliding-window.test.mjs"
+  ],
+  "extracted_test_files": [
+    "test/sliding-window.test.mjs"
+  ],
+  "stack": {
+    "primary": "node",
+    "tags": [
+      "node",
+      "javascript"
+    ],
+    "packageManager": "npm",
+    "hasPlaywright": false,
+    "hasVitest": false,
+    "hasJest": false,
+    "hasNextJs": false,
+    "hasPostgresHint": false,
+    "externalServices": [],
+    "defaultTestCommand": "npm test"
+  }
+}

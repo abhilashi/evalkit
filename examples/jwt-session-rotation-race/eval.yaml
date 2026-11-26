@@ -1,0 +1,26 @@
+spec_version: "0.1"
+id: jwt-session-rotation-race
+title: "fix: add concurrent refresh grace window and family-wide theft revocation"
+stack:
+  - node
+  - javascript
+  - auth
+  - security
+category: bugfix
+source:
+  base_commit: 521fd5de0eed79dcd787378a7aca74b7cdc55567
+  fix_commit: 10add41fd7f70f453061fa69da72d5a512a32b2b
+  captured_at: 2026-11-26T21:11:08.444Z
+  files_changed: 2
+  insertions: 91
+  deletions: 8
+timeouts:
+  solve_sec: 1200
+  verify_sec: 180
+grading:
+  type: deterministic
+  network_access: false
+  flakiness_runs: 3
+ownership:
+  author_attestation: true
+  license: mit

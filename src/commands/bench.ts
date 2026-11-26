@@ -11,7 +11,7 @@ import type {
   SandboxMode,
 } from "../types.js";
 import { execSyncSafe, isDockerAvailable, tailOutput } from "../utils/exec.js";
-import { computeBundleSha256 } from "../utils/git.js";
+import { computeBundleSha256, ensureSingleCommitGit } from "../utils/git.js";
 import { c, printFail, printHeader, printInfo, printPass, printWarn } from "../utils/format.js";
 
 export interface BenchOptions {
@@ -301,6 +301,7 @@ export function runBench(options: BenchOptions): number {
         const agentPatchPath = path.join(trialRoot, "agent.patch");
         fs.mkdirSync(trialRoot, { recursive: true });
         fs.cpSync(repoSrc, workspaceDir, { recursive: true, force: true });
+        ensureSingleCommitGit(workspaceDir);
 
         // 1. Solve phase (isolated workspace containing ONLY base_commit)
         let solveExit = 0;

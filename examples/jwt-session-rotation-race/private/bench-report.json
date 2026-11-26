@@ -1,0 +1,111 @@
+{
+  "spec_version": "0.1",
+  "id": "jwt-session-rotation-race",
+  "benchmarked_at": "2026-11-26T21:11:10.844Z",
+  "bundle_sha256": "f91561c2e52ec67192432565ef2d8d7c09633fad9420656fc895db711c1a941b",
+  "grade_sandbox": "local",
+  "network_isolated_grading": false,
+  "trials_per_agent": 3,
+  "agents": [
+    {
+      "agent": "noop",
+      "passed": 0,
+      "trials": 3,
+      "pass_rate": 0,
+      "avg_solve_ms": 0,
+      "avg_insertions": 0,
+      "avg_deletions": 0,
+      "results": [
+        {
+          "trial": 1,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 145,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "    expected: false,\n    operator: 'strictEqual'\n  }\n\ntest at test/rotation-race.test.mjs:21:1\n✖ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.104542ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-02qaVN/noop-1/workspace/test/rotation-race.test.mjs:28:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3)\n\ntest at test/rotation-race.test.mjs:35:1\n✖ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.0955ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-02qaVN/noop-1/workspace/test/rotation-race.test.mjs:43:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+        },
+        {
+          "trial": 2,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 142,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "    expected: false,\n    operator: 'strictEqual'\n  }\n\ntest at test/rotation-race.test.mjs:21:1\n✖ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.098292ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-02qaVN/noop-2/workspace/test/rotation-race.test.mjs:28:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3)\n\ntest at test/rotation-race.test.mjs:35:1\n✖ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.097542ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-02qaVN/noop-2/workspace/test/rotation-race.test.mjs:43:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+        },
+        {
+          "trial": 3,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 144,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "    expected: false,\n    operator: 'strictEqual'\n  }\n\ntest at test/rotation-race.test.mjs:21:1\n✖ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.112917ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-02qaVN/noop-3/workspace/test/rotation-race.test.mjs:28:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3)\n\ntest at test/rotation-race.test.mjs:35:1\n✖ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.131542ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-02qaVN/noop-3/workspace/test/rotation-race.test.mjs:43:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)"
+        }
+      ]
+    },
+    {
+      "agent": "oracle",
+      "passed": 3,
+      "trials": 3,
+      "pass_rate": 1,
+      "avg_solve_ms": 9,
+      "avg_insertions": 46,
+      "avg_deletions": 8,
+      "results": [
+        {
+          "trial": 1,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 9,
+          "grade_duration_ms": 142,
+          "files_changed": 1,
+          "insertions": 46,
+          "deletions": 8,
+          "solve_timed_out": false,
+          "output_tail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.449875ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.44875ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.105708ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.090417ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 39.116958"
+        },
+        {
+          "trial": 2,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 9,
+          "grade_duration_ms": 140,
+          "files_changed": 1,
+          "insertions": 46,
+          "deletions": 8,
+          "solve_timed_out": false,
+          "output_tail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.592958ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.588ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.1355ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.118042ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.911459"
+        },
+        {
+          "trial": 3,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 9,
+          "grade_duration_ms": 140,
+          "files_changed": 1,
+          "insertions": 46,
+          "deletions": 8,
+          "solve_timed_out": false,
+          "output_tail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.464375ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.532542ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.138916ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.123875ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 38.628292"
+        }
+      ]
+    }
+  ]
+}

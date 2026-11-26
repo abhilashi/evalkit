@@ -381,6 +381,15 @@ export function computeBundleSha256(bundleDir: string): string {
   return hash.digest("hex");
 }
 
+export function ensureSingleCommitGit(dir: string): void {
+  if (fs.existsSync(path.join(dir, ".git"))) return;
+  execSyncSafe("git", ["init", "-q"], { cwd: dir });
+  execSyncSafe("git", ["config", "user.email", "evalkit@local"], { cwd: dir });
+  execSyncSafe("git", ["config", "user.name", "evalkit"], { cwd: dir });
+  execSyncSafe("git", ["add", "-A"], { cwd: dir });
+  execSyncSafe("git", ["commit", "-q", "-m", "Initial task snapshot"], { cwd: dir });
+}
+
 export function slugify(input: string): string {
   return input
     .toLowerCase()

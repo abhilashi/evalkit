@@ -1,0 +1,50 @@
+{
+  "spec_version": "0.1",
+  "id": "rate-limiter-sliding-window",
+  "stack": [
+    "node",
+    "javascript",
+    "api",
+    "rate-limiting"
+  ],
+  "category": "perf",
+  "complexity": {
+    "files_changed": 2,
+    "insertions": 85,
+    "deletions": 7
+  },
+  "verification": {
+    "verified": true,
+    "sandbox": "local",
+    "network_isolated": false,
+    "gold_pass_rate": "3/3",
+    "verified_at": "2026-11-26T21:11:12.105Z"
+  },
+  "benchmark": {
+    "benchmarked_at": "2026-11-26T21:11:13.626Z",
+    "grade_sandbox": "local",
+    "trials_per_agent": 3,
+    "results": [
+      {
+        "agent": "noop",
+        "passed": 0,
+        "trials": 3,
+        "pass_rate": 0,
+        "avg_solve_ms": 0
+      },
+      {
+        "agent": "oracle",
+        "passed": 3,
+        "trials": 3,
+        "pass_rate": 1,
+        "avg_solve_ms": 9
+      }
+    ]
+  },
+  "ownership": {
+    "author_attestation": true,
+    "license": "mit"
+  },
+  "bundle_sha256": "65290d38b65986a1e4beca73d9c436850e34f5380b1a29c41b58a151062538ba",
+  "packed_at": "2026-11-26T21:11:13.687Z"
+}

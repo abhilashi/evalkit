@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_PATH = path.join(PROJECT_ROOT, "dist", "cli.js");
@@ -13,6 +14,27 @@ function runCli(args: string[], cwd?: string) {
     cwd: cwd ?? PROJECT_ROOT,
     encoding: "utf8",
     timeout: 60_000,
+  });
+}
+
+function runCliAsync(
+  args: string[],
+  cwd?: string
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [CLI_PATH, ...args], {
+      cwd: cwd ?? PROJECT_ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("close", (code) => resolve({ status: code, stdout, stderr }));
   });
 }
 
@@ -198,7 +220,7 @@ test("rejects negative amounts or missing event IDs", () => {
   return { baseCommit, fixCommit };
 }
 
-test("full evalkit lifecycle: mine -> init -> audit -> verify -> pack -> install-skill", () => {
+test("full evalkit lifecycle: mine -> init -> audit -> verify -> bench -> pack -> leaderboard -> submit -> install-skill", async () => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "evalkit-e2e-"));
   const repoDir = path.join(tmpRoot, "indie-billing-app");
   const bundleDir = path.join(tmpRoot, "evals", "webhook-idempotency");
@@ -380,7 +402,59 @@ Agents often added a module-level global Set instead of storing processed IDs pe
       2
     );
 
-    // 8. INSTALL-SKILL to a custom directory
+    // 8. LEADERBOARD generation from packed bundle
+    const leaderboardOut = path.join(tmpRoot, "site");
+    const lbRes = runCli([
+      "leaderboard",
+      path.dirname(bundleDir),
+      "--out",
+      leaderboardOut,
+      "--json",
+    ]);
+    assert.equal(lbRes.status, 0, `${lbRes.stdout}\n${lbRes.stderr}`);
+    const lbJson = JSON.parse(lbRes.stdout);
+    assert.equal(lbJson.summary.total_tasks, 1);
+    assert.equal(lbJson.summary.verified_tasks, 1);
+    assert.equal(fs.existsSync(path.join(leaderboardOut, "index.html")), true);
+    assert.equal(fs.existsSync(path.join(leaderboardOut, "data.json")), true);
+
+    // 9. SUBMIT dry-run + live local HTTP intake test
+    const drySubmit = runCli(["submit", bundleDir, "--dry-run", "--json"]);
+    assert.equal(drySubmit.status, 0, `${drySubmit.stdout}\n${drySubmit.stderr}`);
+    const dryJson = JSON.parse(drySubmit.stdout);
+    assert.equal(dryJson.dry_run, true);
+    assert.equal(dryJson.includes_source_code, false);
+
+    let receivedCardId = "";
+    const server = http.createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => chunks.push(chunk));
+      req.on("end", () => {
+        const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+          card?: { id?: string };
+        };
+        receivedCardId = parsed.card?.id ?? "";
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ accepted: true, task_id: receivedCardId }));
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    try {
+      const addr = server.address();
+      assert.ok(addr && typeof addr === "object");
+      const endpoint = `http://127.0.0.1:${addr.port}/submit`;
+      const submitRes = await runCliAsync(["submit", bundleDir, "--endpoint", endpoint, "--json"]);
+      assert.equal(submitRes.status, 0, `${submitRes.stdout}\n${submitRes.stderr}`);
+      const submitJson = JSON.parse(submitRes.stdout);
+      assert.equal(submitJson.submitted, true);
+      assert.equal(submitJson.mode, "https-blind-card");
+      assert.equal(receivedCardId, "webhook-idempotency");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+
+    // 10. INSTALL-SKILL to a custom directory
     const skillRes = runCli(["install-skill", "--target", skillInstallDir]);
     assert.equal(skillRes.status, 0, skillRes.stderr);
     assert.equal(fs.existsSync(path.join(skillInstallDir, "SKILL.md")), true);

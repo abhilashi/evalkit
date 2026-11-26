@@ -1,0 +1,50 @@
+{
+  "spec_version": "0.1",
+  "id": "jwt-session-rotation-race",
+  "stack": [
+    "node",
+    "javascript",
+    "auth",
+    "security"
+  ],
+  "category": "bugfix",
+  "complexity": {
+    "files_changed": 2,
+    "insertions": 91,
+    "deletions": 8
+  },
+  "verification": {
+    "verified": true,
+    "sandbox": "local",
+    "network_isolated": false,
+    "gold_pass_rate": "3/3",
+    "verified_at": "2026-11-26T21:11:09.337Z"
+  },
+  "benchmark": {
+    "benchmarked_at": "2026-11-26T21:11:10.844Z",
+    "grade_sandbox": "local",
+    "trials_per_agent": 3,
+    "results": [
+      {
+        "agent": "noop",
+        "passed": 0,
+        "trials": 3,
+        "pass_rate": 0,
+        "avg_solve_ms": 0
+      },
+      {
+        "agent": "oracle",
+        "passed": 3,
+        "trials": 3,
+        "pass_rate": 1,
+        "avg_solve_ms": 9
+      }
+    ]
+  },
+  "ownership": {
+    "author_attestation": true,
+    "license": "mit"
+  },
+  "bundle_sha256": "f91561c2e52ec67192432565ef2d8d7c09633fad9420656fc895db711c1a941b",
+  "packed_at": "2026-11-26T21:11:10.905Z"
+}

@@ -1,0 +1,111 @@
+{
+  "spec_version": "0.1",
+  "id": "rate-limiter-sliding-window",
+  "benchmarked_at": "2026-11-26T21:11:13.626Z",
+  "bundle_sha256": "65290d38b65986a1e4beca73d9c436850e34f5380b1a29c41b58a151062538ba",
+  "grade_sandbox": "local",
+  "network_isolated_grading": false,
+  "trials_per_agent": 3,
+  "agents": [
+    {
+      "agent": "noop",
+      "passed": 0,
+      "trials": 3,
+      "pass_rate": 0,
+      "avg_solve_ms": 0,
+      "avg_insertions": 0,
+      "avg_deletions": 0,
+      "results": [
+        {
+          "trial": 1,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 142,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.070291ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-8V8ynZ/noop-1/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
+        },
+        {
+          "trial": 2,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 142,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.069625ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-8V8ynZ/noop-2/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
+        },
+        {
+          "trial": 3,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 144,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.062125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-8V8ynZ/noop-3/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
+        }
+      ]
+    },
+    {
+      "agent": "oracle",
+      "passed": 3,
+      "trials": 3,
+      "pass_rate": 1,
+      "avg_solve_ms": 9,
+      "avg_insertions": 39,
+      "avg_deletions": 7,
+      "results": [
+        {
+          "trial": 1,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 9,
+          "grade_duration_ms": 141,
+          "files_changed": 1,
+          "insertions": 39,
+          "deletions": 7,
+          "solve_timed_out": false,
+          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.595292ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.314667ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.570375ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.051625ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.994042"
+        },
+        {
+          "trial": 2,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 10,
+          "grade_duration_ms": 141,
+          "files_changed": 1,
+          "insertions": 39,
+          "deletions": 7,
+          "solve_timed_out": false,
+          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.750458ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.373667ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.5645ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.063875ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.925667"
+        },
+        {
+          "trial": 3,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 9,
+          "grade_duration_ms": 146,
+          "files_changed": 1,
+          "insertions": 39,
+          "deletions": 7,
+          "solve_timed_out": false,
+          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.63425ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.32375ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.520792ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.064459ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.475583"
+        }
+      ]
+    }
+  ]
+}

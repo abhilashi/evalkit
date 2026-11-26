@@ -1,0 +1,50 @@
+{
+  "spec_version": "0.1",
+  "id": "stripe-webhook-idempotency",
+  "stack": [
+    "node",
+    "javascript",
+    "stripe",
+    "billing"
+  ],
+  "category": "bugfix",
+  "complexity": {
+    "files_changed": 3,
+    "insertions": 164,
+    "deletions": 6
+  },
+  "verification": {
+    "verified": true,
+    "sandbox": "local",
+    "network_isolated": false,
+    "gold_pass_rate": "3/3",
+    "verified_at": "2026-11-26T21:11:06.555Z"
+  },
+  "benchmark": {
+    "benchmarked_at": "2026-11-26T21:11:08.065Z",
+    "grade_sandbox": "local",
+    "trials_per_agent": 3,
+    "results": [
+      {
+        "agent": "noop",
+        "passed": 0,
+        "trials": 3,
+        "pass_rate": 0,
+        "avg_solve_ms": 0
+      },
+      {
+        "agent": "oracle",
+        "passed": 3,
+        "trials": 3,
+        "pass_rate": 1,
+        "avg_solve_ms": 8
+      }
+    ]
+  },
+  "ownership": {
+    "author_attestation": true,
+    "license": "mit"
+  },
+  "bundle_sha256": "87ebf22f4b4b3d2099305493fde578ad267cd11745008cef03907bec36f886d5",
+  "packed_at": "2026-11-26T21:11:08.125Z"
+}

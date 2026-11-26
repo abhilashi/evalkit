@@ -4,7 +4,7 @@ import path from "node:path";
 import YAML from "yaml";
 import type { EvalConfig, SandboxMode, VerifyReport, VerifyRunResult } from "../types.js";
 import { execSyncSafe, isDockerAvailable, tailOutput } from "../utils/exec.js";
-import { computeBundleSha256 } from "../utils/git.js";
+import { computeBundleSha256, ensureSingleCommitGit } from "../utils/git.js";
 import { c, printFail, printHeader, printInfo, printPass, printWarn } from "../utils/format.js";
 
 export interface VerifyOptions {
@@ -84,6 +84,7 @@ function verifyInLocalSandbox(
       if (!quiet) printInfo(`Running gold oracle pass ${i}/${runs}...`);
       const runDir = path.join(tmpRoot, `gold-${i}`);
       copyDirRecursive(repoSrc, runDir);
+      ensureSingleCommitGit(runDir);
 
       const applyRes = execSyncSafe("git", ["apply", "--whitespace=nowarn", patchPath], {
         cwd: runDir,

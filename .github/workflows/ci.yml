@@ -29,6 +29,17 @@ jobs:
       - name: Build and run E2E tests
         run: npm test
 
+      - name: Audit and verify showcase examples
+        run: |
+          for dir in examples/*; do
+            if [ -d "$dir" ]; then
+              echo "::group::Validating $dir"
+              node dist/cli.js audit "$dir" --strict
+              node dist/cli.js verify "$dir" --mode local --runs 2
+              echo "::endgroup::"
+            fi
+          done
+
       - name: Verify npm package contents
         run: npm pack --dry-run
 

@@ -1,0 +1,78 @@
+diff --git a/src/ledger.mjs b/src/ledger.mjs
+index 88fd2b5..1ad0b8d 100644
+--- a/src/ledger.mjs
++++ b/src/ledger.mjs
+@@ -1,5 +1,7 @@
+ export function createLedger() {
+   return {
+     balances: new Map(),
++    processedEvents: new Set(),
++    charges: new Map(),
+   };
+ }
+diff --git a/src/webhooks.mjs b/src/webhooks.mjs
+index 04b356f..5b70b20 100644
+--- a/src/webhooks.mjs
++++ b/src/webhooks.mjs
+@@ -1,15 +1,55 @@
++function ensureLedgerState(ledger) {
++  if (!ledger.processedEvents) ledger.processedEvents = new Set();
++  if (!ledger.charges) ledger.charges = new Map();
++}
++
+ export function processBillingWebhook(ledger, event) {
++  ensureLedgerState(ledger);
++
++  if (event.type !== "invoice.paid" && event.type !== "charge.refunded") {
++    return { applied: false, duplicate: false };
++  }
++
++  if (!event.id || !event.customerId || typeof event.amountCents !== "number" || event.amountCents <= 0) {
++    throw new Error("Invalid billing webhook payload");
++  }
++
++  if (ledger.processedEvents.has(event.id)) {
++    return {
++      applied: false,
++      duplicate: true,
++      balance: ledger.balances.get(event.customerId) ?? 0,
++    };
++  }
++
+   if (event.type === "invoice.paid") {
++    if (!event.chargeId) {
++      throw new Error("invoice.paid event requires chargeId");
++    }
++    ledger.processedEvents.add(event.id);
++    const prevCharge = ledger.charges.get(event.chargeId) ?? { paid: 0, refunded: 0 };
++    prevCharge.paid += event.amountCents;
++    ledger.charges.set(event.chargeId, prevCharge);
++
+     const cur = ledger.balances.get(event.customerId) ?? 0;
+     const next = cur + event.amountCents;
+     ledger.balances.set(event.customerId, next);
+     return { applied: true, duplicate: false, balance: next };
+   }
+-  if (event.type === "charge.refunded") {
+-    const cur = ledger.balances.get(event.customerId) ?? 0;
+-    const next = cur - event.amountCents;
+-    ledger.balances.set(event.customerId, next);
+-    return { applied: true, duplicate: false, balance: next };
++
++  // charge.refunded
++  if (!event.chargeId) {
++    throw new Error("charge.refunded event requires chargeId");
++  }
++  const charge = ledger.charges.get(event.chargeId);
++  if (!charge || charge.refunded + event.amountCents > charge.paid) {
++    throw new Error("Refund exceeds paid amount for charge");
+   }
+-  return { applied: false, duplicate: false };
++
++  ledger.processedEvents.add(event.id);
++  charge.refunded += event.amountCents;
++  const cur = ledger.balances.get(event.customerId) ?? 0;
++  const next = cur - event.amountCents;
++  ledger.balances.set(event.customerId, next);
++  return { applied: true, duplicate: false, balance: next };
+ }

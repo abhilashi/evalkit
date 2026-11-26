@@ -1,0 +1,13 @@
+version: "0.1"
+criteria:
+  - id: functional-correctness
+    weight: 0.7
+    description: All hidden fail-to-pass verification assertions succeed
+      deterministically offline.
+  - id: no-regressions
+    weight: 0.2
+    description: Existing behavior and regression tests remain green.
+  - id: root-cause-fix
+    weight: 0.1
+    description: Addresses the underlying root cause rather than hardcoding test
+      inputs or bypassing checks.

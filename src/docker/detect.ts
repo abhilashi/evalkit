@@ -173,6 +173,7 @@ WORKDIR /workspace
 
 # Copy repo snapshot pinned at base_commit
 COPY repo/ /workspace/
+RUN if [ ! -d .git ]; then git init -q && git config user.email evalkit@local && git config user.name evalkit && git add -A && git commit -q -m "snapshot"; fi
 
 # Install dependencies during build so runtime is 100% offline
 RUN ${installCmd}

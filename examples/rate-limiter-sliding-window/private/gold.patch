@@ -1,0 +1,67 @@
+diff --git a/src/limiter.mjs b/src/limiter.mjs
+index f92053c..bbfba58 100644
+--- a/src/limiter.mjs
++++ b/src/limiter.mjs
+@@ -1,23 +1,55 @@
+ export function createRateLimiter({ limit, windowMs }) {
++  if (!Number.isInteger(limit) || limit <= 0) {
++    throw new Error("limit must be a positive integer");
++  }
++  if (typeof windowMs !== "number" || windowMs <= 0) {
++    throw new Error("windowMs must be positive");
++  }
++
+   const buckets = new Map();
+ 
++  function pruneExpired(now) {
++    const cutoff = now - windowMs;
++    for (const [k, timestamps] of buckets.entries()) {
++      let firstValid = 0;
++      while (firstValid < timestamps.length && timestamps[firstValid] <= cutoff) {
++        firstValid++;
++      }
++      if (firstValid === timestamps.length) {
++        buckets.delete(k);
++      } else if (firstValid > 0) {
++        timestamps.splice(0, firstValid);
++      }
++    }
++  }
++
+   function check(key, now = Date.now()) {
+-    const windowId = Math.floor(now / windowMs);
+-    const bucketKey = `${key}:${windowId}`;
+-    const count = buckets.get(bucketKey) ?? 0;
++    pruneExpired(now);
+ 
+-    if (count >= limit) {
++    const timestamps = buckets.get(key) ?? [];
++    if (timestamps.length >= limit) {
++      const oldest = timestamps[0];
++      const retryAfterMs = Math.max(1, oldest + windowMs - now);
+       return {
+         allowed: false,
+         remaining: 0,
+-        retryAfterMs: windowMs,
++        retryAfterMs,
+       };
+     }
+ 
+-    buckets.set(bucketKey, count + 1);
++    // Keep timestamps sorted even if minor clock jitter produces an out-of-order timestamp
++    if (timestamps.length === 0 || now >= timestamps[timestamps.length - 1]) {
++      timestamps.push(now);
++    } else {
++      let idx = timestamps.length - 1;
++      while (idx > 0 && timestamps[idx - 1] > now) idx--;
++      timestamps.splice(idx, 0, now);
++    }
++
++    buckets.set(key, timestamps);
+     return {
+       allowed: true,
+-      remaining: limit - (count + 1),
++      remaining: limit - timestamps.length,
+       retryAfterMs: 0,
+     };
+   }

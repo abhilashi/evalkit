@@ -1,0 +1,27 @@
+spec_version: "0.1"
+id: rate-limiter-sliding-window
+title: "fix: switch to sliding-window log with exact retryAfterMs and idle
+  bucket eviction"
+stack:
+  - node
+  - javascript
+  - api
+  - rate-limiting
+category: perf
+source:
+  base_commit: 3d53dc49b5b5101180b407d0ccfb88eed376b69f
+  fix_commit: 9cb0230fab02730f0df346c29d35c3a4b463e8ce
+  captured_at: 2026-11-26T21:11:11.214Z
+  files_changed: 2
+  insertions: 85
+  deletions: 7
+timeouts:
+  solve_sec: 1200
+  verify_sec: 180
+grading:
+  type: deterministic
+  network_access: false
+  flakiness_runs: 3
+ownership:
+  author_attestation: true
+  license: mit

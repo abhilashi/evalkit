@@ -1,0 +1,111 @@
+{
+  "spec_version": "0.1",
+  "id": "stripe-webhook-idempotency",
+  "benchmarked_at": "2026-11-26T21:11:08.065Z",
+  "bundle_sha256": "87ebf22f4b4b3d2099305493fde578ad267cd11745008cef03907bec36f886d5",
+  "grade_sandbox": "local",
+  "network_isolated_grading": false,
+  "trials_per_agent": 3,
+  "agents": [
+    {
+      "agent": "noop",
+      "passed": 0,
+      "trials": 3,
+      "pass_rate": 0,
+      "avg_solve_ms": 0,
+      "avg_insertions": 0,
+      "avg_deletions": 0,
+      "results": [
+        {
+          "trial": 1,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 144,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { applied: true, duplicate: false, balance: 10000 },\n    expected: { applied: false, duplicate: true, balance: 5000 },\n    operator: 'deepStrictEqual'\n  }\n\ntest at test/idempotency.test.mjs:55:1\n✖ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.144ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-ltAlXE/noop-1/workspace/test/idempotency.test.mjs:75:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws'\n  }"
+        },
+        {
+          "trial": 2,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 143,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { applied: true, duplicate: false, balance: 10000 },\n    expected: { applied: false, duplicate: true, balance: 5000 },\n    operator: 'deepStrictEqual'\n  }\n\ntest at test/idempotency.test.mjs:55:1\n✖ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.111667ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-ltAlXE/noop-2/workspace/test/idempotency.test.mjs:75:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws'\n  }"
+        },
+        {
+          "trial": 3,
+          "passed": false,
+          "solve_exit_code": 0,
+          "grade_exit_code": 1,
+          "solve_duration_ms": 0,
+          "grade_duration_ms": 144,
+          "files_changed": 0,
+          "insertions": 0,
+          "deletions": 0,
+          "solve_timed_out": false,
+          "output_tail": "      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { applied: true, duplicate: false, balance: 10000 },\n    expected: { applied: false, duplicate: true, balance: 5000 },\n    operator: 'deepStrictEqual'\n  }\n\ntest at test/idempotency.test.mjs:55:1\n✖ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.133959ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-ltAlXE/noop-3/workspace/test/idempotency.test.mjs:75:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws'\n  }"
+        }
+      ]
+    },
+    {
+      "agent": "oracle",
+      "passed": 3,
+      "trials": 3,
+      "pass_rate": 1,
+      "avg_solve_ms": 8,
+      "avg_insertions": 48,
+      "avg_deletions": 6,
+      "results": [
+        {
+          "trial": 1,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 9,
+          "grade_duration_ms": 139,
+          "files_changed": 2,
+          "insertions": 48,
+          "deletions": 6,
+          "solve_timed_out": false,
+          "output_tail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.286667ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.624708ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.125167ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.573041"
+        },
+        {
+          "trial": 2,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 8,
+          "grade_duration_ms": 140,
+          "files_changed": 2,
+          "insertions": 48,
+          "deletions": 6,
+          "solve_timed_out": false,
+          "output_tail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.292ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.651875ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.141792ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.811917"
+        },
+        {
+          "trial": 3,
+          "passed": true,
+          "solve_exit_code": 0,
+          "grade_exit_code": 0,
+          "solve_duration_ms": 8,
+          "grade_duration_ms": 140,
+          "files_changed": 2,
+          "insertions": 48,
+          "deletions": 6,
+          "solve_timed_out": false,
+          "output_tail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.300417ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.64775ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.126875ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 36.818208"
+        }
+      ]
+    }
+  ]
+}

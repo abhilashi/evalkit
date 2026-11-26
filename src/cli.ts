@@ -7,10 +7,12 @@ import { runAudit } from "./commands/audit.js";
 import { runVerify } from "./commands/verify.js";
 import { runBench } from "./commands/bench.js";
 import { runPack } from "./commands/pack.js";
+import { runLeaderboard } from "./commands/leaderboard.js";
+import { runSubmit } from "./commands/submit.js";
 import { runInstallSkill } from "./commands/install-skill.js";
 import { c, printFail } from "./utils/format.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 function printHelp(): void {
   console.log(`
@@ -27,6 +29,8 @@ ${c.bold("COMMANDS")}
   ${c.cyan("verify")}         Run deterministic base-fail + 3x gold-pass verification (Docker offline or local)
   ${c.cyan("bench")}          Benchmark coding agents (claude, codex, gemini, custom) on a bundle
   ${c.cyan("pack")}           Validate, attest IP ownership, generate blind scorecard (card.json) + .tar.gz
+  ${c.cyan("leaderboard")}    Generate a static HTML + JSON leaderboard from verified card.json bundles
+  ${c.cyan("submit")}         Submit a blind scorecard (or full bundle) to the Private Vault or GitHub
 
 ${c.bold("EXAMPLES")}
   evalkit install-skill --target auto
@@ -36,12 +40,14 @@ ${c.bold("EXAMPLES")}
   evalkit verify ./evals/webhook-race --runs 3
   evalkit bench ./evals/webhook-race --agents claude,codex,gemini --trials 3
   evalkit pack ./evals/webhook-race --attest-ip --license private-vault
+  evalkit leaderboard ./examples --out ./docs
+  evalkit submit ./evals/webhook-race --dry-run
 
 Run ${c.dim("evalkit <command> --help")} for command-specific flags.
 `);
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
 
@@ -279,6 +285,70 @@ function main(): void {
         break;
       }
 
+      case "leaderboard": {
+        const { values, positionals } = parseArgs({
+          args: subArgs,
+          allowPositionals: true,
+          options: {
+            out: { type: "string", short: "o", default: "./docs" },
+            title: { type: "string", default: "evalkit — Real-World Indie Coding Evals" },
+            "repo-url": { type: "string", default: "https://github.com/abhilashi/evalkit" },
+            json: { type: "boolean", default: false },
+            help: { type: "boolean", short: "h", default: false },
+          },
+        });
+        if (values.help) {
+          console.log(
+            'Usage: evalkit leaderboard [evals-dir] [--out ./docs] [--title "..."] [--repo-url "..."] [--json]'
+          );
+          process.exitCode = 0;
+          return;
+        }
+        exitCode = runLeaderboard({
+          dir: positionals[0] ?? "./examples",
+          outDir: values.out,
+          title: values.title,
+          repoUrl: values["repo-url"],
+          json: values.json,
+        });
+        break;
+      }
+
+      case "submit": {
+        const { values, positionals } = parseArgs({
+          args: subArgs,
+          allowPositionals: true,
+          options: {
+            endpoint: { type: "string", short: "e" },
+            "api-key": { type: "string" },
+            "github-issue": { type: "boolean", default: false },
+            "github-repo": { type: "string", default: "abhilashi/evalkit" },
+            "full-bundle": { type: "boolean", default: false },
+            "dry-run": { type: "boolean", default: false },
+            json: { type: "boolean", default: false },
+            help: { type: "boolean", short: "h", default: false },
+          },
+        });
+        if (values.help || !positionals[0]) {
+          console.log(
+            "Usage: evalkit submit <bundle-dir> [--endpoint <url>] [--github-issue] [--github-repo owner/repo] [--full-bundle] [--dry-run] [--json]"
+          );
+          process.exitCode = values.help ? 0 : 1;
+          return;
+        }
+        exitCode = await runSubmit({
+          bundleDir: positionals[0],
+          endpoint: values.endpoint,
+          apiKey: values["api-key"],
+          githubIssue: values["github-issue"],
+          githubRepo: values["github-repo"],
+          fullBundle: values["full-bundle"],
+          dryRun: values["dry-run"],
+          json: values.json,
+        });
+        break;
+      }
+
       case "install-skill": {
         const { values } = parseArgs({
           args: subArgs,
@@ -317,4 +387,4 @@ function main(): void {
   }
 }
 
-main();
+void main();
