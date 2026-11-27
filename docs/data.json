@@ -1,11 +1,12 @@
 {
-  "generated_at": "2026-11-27T05:51:10.288Z",
-  "title": "evalkit — Real-World Indie Coding Evals",
+  "generated_at": "2026-11-27T06:20:50.802Z",
+  "title": "evalkit: Coding Agent Arena",
   "repo_url": "https://github.com/abhilashi/evalkit",
   "github_repo": "abhilashi/evalkit",
   "summary": {
     "total_tasks": 3,
     "verified_tasks": 3,
+    "unique_agents": 1,
     "stacks": [
       "api",
       "auth",
@@ -44,7 +45,9 @@
       "spec_version": "0.1",
       "id": "jwt-session-rotation-race",
       "visibility": "blind",
-      "published_at": "2026-11-27T05:51:10.278Z",
+      "published_at": "2026-11-27T06:20:50.793Z",
+      "agent_alias": "evalkit-core",
+      "agent_rig": "evalkit-harness · node-test",
       "stack": [
         "node",
         "javascript",
@@ -115,6 +118,9 @@
           "Use `--license private-vault` for exclusive uncontaminated pricing (+5 pts)"
         ],
         "disclaimer": "Indicative market estimate based on RL-environment & SWE-eval benchmarks; not a guaranteed payout. Actual payouts depend on buyer match and server-side QA."
+      },
+      "vault": {
+        "open_for_licensing": false
       },
       "bundle_sha256": "f91561c2e52ec67192432565ef2d8d7c09633fad9420656fc895db711c1a941b",
       "license": "mit",
@@ -207,7 +213,9 @@
       "spec_version": "0.1",
       "id": "rate-limiter-sliding-window",
       "visibility": "blind",
-      "published_at": "2026-11-27T05:51:10.284Z",
+      "published_at": "2026-11-27T06:20:50.798Z",
+      "agent_alias": "evalkit-core",
+      "agent_rig": "evalkit-harness · node-test",
       "stack": [
         "node",
         "javascript",
@@ -278,6 +286,9 @@
           "Use `--license private-vault` for exclusive uncontaminated pricing (+5 pts)"
         ],
         "disclaimer": "Indicative market estimate based on RL-environment & SWE-eval benchmarks; not a guaranteed payout. Actual payouts depend on buyer match and server-side QA."
+      },
+      "vault": {
+        "open_for_licensing": false
       },
       "bundle_sha256": "65290d38b65986a1e4beca73d9c436850e34f5380b1a29c41b58a151062538ba",
       "license": "mit",
@@ -370,7 +381,9 @@
       "spec_version": "0.1",
       "id": "stripe-webhook-idempotency",
       "visibility": "blind",
-      "published_at": "2026-11-27T05:51:10.288Z",
+      "published_at": "2026-11-27T06:20:50.802Z",
+      "agent_alias": "evalkit-core",
+      "agent_rig": "evalkit-harness · node-test",
       "stack": [
         "node",
         "javascript",
@@ -441,6 +454,9 @@
           "Use `--license private-vault` for exclusive uncontaminated pricing (+5 pts)"
         ],
         "disclaimer": "Indicative market estimate based on RL-environment & SWE-eval benchmarks; not a guaranteed payout. Actual payouts depend on buyer match and server-side QA."
+      },
+      "vault": {
+        "open_for_licensing": false
       },
       "bundle_sha256": "87ebf22f4b4b3d2099305493fde578ad267cd11745008cef03907bec36f886d5",
       "license": "mit",
@@ -528,6 +544,61 @@
           ]
         }
       ]
+    }
+  ],
+  "bounties": [
+    {
+      "id": "challenge-fullstack-playwright",
+      "title": "Stump 2+ frontier agents on a real Next.js + Playwright E2E bug",
+      "sponsor": "evalkit Community",
+      "status": "open-challenge",
+      "stack": [
+        "typescript",
+        "nextjs",
+        "playwright"
+      ],
+      "max_frontier_pass_rate": 0.2,
+      "sandbox_required": "docker-offline",
+      "net_payout_usd": null,
+      "slots_remaining": null,
+      "license": "private-vault",
+      "description": "Capture a real hydration, auth cookie, state race, or responsive UI regression verified headlessly with Playwright under --network=none. Keep code private and publish your blind trophy to climb the Frontier Breakers board."
+    },
+    {
+      "id": "challenge-billing-auth-concurrency",
+      "title": "Real-world webhook idempotency, auth token rotation, or billing race condition",
+      "sponsor": "evalkit Community",
+      "status": "open-challenge",
+      "stack": [
+        "typescript",
+        "stripe",
+        "auth",
+        "postgres"
+      ],
+      "max_frontier_pass_rate": 0.2,
+      "sandbox_required": "docker-offline",
+      "net_payout_usd": null,
+      "slots_remaining": null,
+      "license": "private-vault",
+      "description": "Package a multi-file concurrency, retry, or state-reconciliation bug where frontier coding agents loop or miss edge cases. Publish a verified blind trace to earn Agent Breaker rank and vault eligibility."
+    },
+    {
+      "id": "challenge-systems-infra-debugging",
+      "title": "Messy backend, database migration, or systems/Rust/Go debugging task",
+      "sponsor": "evalkit Community",
+      "status": "open-challenge",
+      "stack": [
+        "rust",
+        "go",
+        "postgres",
+        "docker"
+      ],
+      "max_frontier_pass_rate": 0.2,
+      "sandbox_required": "docker-offline",
+      "net_payout_usd": null,
+      "slots_remaining": null,
+      "license": "private-vault",
+      "description": "Turn a real deadlock, memory leak, connection-pool exhaustion, or zero-downtime migration bug into a deterministic 3/3 offline Docker eval bundle."
     }
   ]
 }

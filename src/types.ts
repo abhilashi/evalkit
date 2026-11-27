@@ -28,6 +28,10 @@ export interface EvalConfig {
   ownership: {
     author_attestation: boolean;
     license: "private-vault" | "mit" | "apache-2.0";
+    vault_open?: boolean;
+    reserve_non_exclusive_usd?: number;
+    reserve_exclusive_usd?: number;
+    allow_rl_training?: boolean;
   };
 }
 
@@ -117,12 +121,29 @@ export interface BenchTrialResult {
   output_tail: string;
 }
 
+export interface BountyListing {
+  id: string;
+  title: string;
+  sponsor: string;
+  status: "funded" | "open-challenge";
+  stack: string[];
+  max_frontier_pass_rate: number;
+  sandbox_required: SandboxMode;
+  net_payout_usd: number | null;
+  slots_remaining: number | null;
+  license: "private-vault" | "non-exclusive" | "exclusive" | "community";
+  description: string;
+}
+
 export interface PublishedTraceEntry {
   spec_version: string;
   id: string;
   visibility: "blind";
   published_at: string;
-  author?: string;
+  agent_alias: string;
+  agent_rig?: string;
+  operator?: string;
+  author?: string; // legacy alias fallback
   stack: string[];
   category: TaskCategory;
   complexity: {
@@ -138,6 +159,12 @@ export interface PublishedTraceEntry {
     verified_at: string | null;
   };
   valuation?: BundleValuation;
+  vault?: {
+    open_for_licensing: boolean;
+    reserve_non_exclusive_usd?: number;
+    reserve_exclusive_usd?: number;
+    allow_rl_training?: boolean;
+  };
   bundle_sha256: string;
   license: string;
   agents: Array<{

@@ -10,11 +10,12 @@ import { runEstimate } from "./commands/estimate.js";
 import { runPack } from "./commands/pack.js";
 import { runLeaderboard } from "./commands/leaderboard.js";
 import { runPublish } from "./commands/publish.js";
+import { runBounties } from "./commands/bounties.js";
 import { runSubmit } from "./commands/submit.js";
 import { runInstallSkill } from "./commands/install-skill.js";
 import { c, printFail } from "./utils/format.js";
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 function printHelp(): void {
   console.log(`
@@ -32,8 +33,9 @@ ${c.bold("COMMANDS")}
   ${c.cyan("bench")}          Benchmark coding agents (claude, codex, gemini, custom) on a bundle
   ${c.cyan("estimate")}       Compute Signal Score (0–100), Tier, and indicative market value range
   ${c.cyan("pack")}           Validate, attest IP ownership, generate blind scorecard (card.json) + .tar.gz
-  ${c.cyan("leaderboard")}    Generate the interactive Blind Trace Board (HTML + JSON)
-  ${c.cyan("publish")}        Publish a strict blind trace (zero code/prompts) to the live board / Gist
+  ${c.cyan("leaderboard")}    Generate the interactive Frontier Breakers & Blind Trace Board
+  ${c.cyan("publish")}        Publish a strict blind trace trophy (zero code/prompts) to the live board
+  ${c.cyan("bounties")}       List active Open Frontier Challenges & funded buyer bounties
   ${c.cyan("submit")}         Submit a blind scorecard (or full bundle) to the Private Vault or GitHub
 
 ${c.bold("EXAMPLES")}
@@ -318,15 +320,18 @@ async function main(): Promise<void> {
           allowPositionals: true,
           options: {
             out: { type: "string", short: "o", default: "./docs" },
-            title: { type: "string", default: "evalkit — Real-World Indie Coding Evals" },
+            title: { type: "string", default: "evalkit: Coding Agent Arena" },
             "repo-url": { type: "string", default: "https://github.com/abhilashi/evalkit" },
+            "default-agent": { type: "string" },
+            "default-author": { type: "string" },
+            bounties: { type: "string" },
             json: { type: "boolean", default: false },
             help: { type: "boolean", short: "h", default: false },
           },
         });
         if (values.help) {
           console.log(
-            'Usage: evalkit leaderboard [evals-dir] [--out ./docs] [--title "..."] [--repo-url "..."] [--json]'
+            'Usage: evalkit leaderboard [evals-dir] [--out ./docs] [--title "..."] [--repo-url "..."] [--default-agent alias] [--bounties ./bounties.json] [--json]'
           );
           process.exitCode = 0;
           return;
@@ -336,6 +341,8 @@ async function main(): Promise<void> {
           outDir: values.out,
           title: values.title,
           repoUrl: values["repo-url"],
+          defaultAgentAlias: values["default-agent"] ?? values["default-author"],
+          bountiesFile: values.bounties,
           json: values.json,
         });
         break;
@@ -347,11 +354,13 @@ async function main(): Promise<void> {
           args: subArgs,
           allowPositionals: true,
           options: {
+            agent: { type: "string" },
+            rig: { type: "string" },
+            operator: { type: "string" },
             board: { type: "boolean", default: false },
             "board-repo": { type: "string", default: "abhilashi/evalkit" },
             gist: { type: "boolean", default: false },
             out: { type: "string", short: "o" },
-            author: { type: "string" },
             "dry-run": { type: "boolean", default: false },
             json: { type: "boolean", default: false },
             help: { type: "boolean", short: "h", default: false },
@@ -359,19 +368,47 @@ async function main(): Promise<void> {
         });
         if (values.help || !positionals[0]) {
           console.log(
-            "Usage: evalkit publish <bundle-dir> [--board] [--board-repo owner/repo] [--gist] [--out trace.json|md] [--author handle] [--dry-run] [--json]"
+            'Usage: evalkit publish <bundle-dir> [--agent <alias>] [--rig "claude-code · opus"] [--operator <github>] [--board] [--board-repo owner/repo] [--gist] [--out trace.json|md] [--dry-run] [--json]'
           );
           process.exitCode = values.help ? 0 : 1;
           return;
         }
         exitCode = runPublish({
           bundleDir: positionals[0],
+          agentAlias: values.agent,
+          agentRig: values.rig,
+          operator: values.operator,
           board: values.board,
           boardRepo: values["board-repo"],
           gist: values.gist,
           outFile: values.out,
-          author: values.author,
           dryRun: values["dry-run"],
+          json: values.json,
+        });
+        break;
+      }
+
+      case "bounties": {
+        const { values } = parseArgs({
+          args: subArgs,
+          allowPositionals: false,
+          options: {
+            source: { type: "string", short: "s" },
+            stack: { type: "string" },
+            json: { type: "boolean", default: false },
+            help: { type: "boolean", short: "h", default: false },
+          },
+        });
+        if (values.help) {
+          console.log(
+            "Usage: evalkit bounties [--source ./bounties.json|<url>] [--stack nextjs] [--json]"
+          );
+          process.exitCode = 0;
+          return;
+        }
+        exitCode = await runBounties({
+          source: values.source,
+          stack: values.stack,
           json: values.json,
         });
         break;

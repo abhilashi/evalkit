@@ -414,11 +414,15 @@ Agents often added a module-level global Set instead of storing processed IDs pe
       2
     );
 
-    // 8. PUBLISH strictly outputs blind trace only (zero code, prompts, diffs, or raw stdout)
+    // 8. PUBLISH strictly outputs blind trace with Agent Alias identity (zero code, prompts, diffs, or raw stdout)
     const traceOutPath = path.join(tmpRoot, "trace-blind.json");
     const pubBlind = runCli([
       "publish",
       bundleDir,
+      "--agent",
+      "neon-warden",
+      "--rig",
+      "claude-code · opus",
       "--out",
       traceOutPath,
       "--dry-run",
@@ -427,6 +431,9 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     assert.equal(pubBlind.status, 0, `${pubBlind.stdout}\n${pubBlind.stderr}`);
     const blindEntry = JSON.parse(fs.readFileSync(traceOutPath, "utf8"));
     assert.equal(blindEntry.visibility, "blind");
+    assert.equal(blindEntry.agent_alias, "neon-warden");
+    assert.equal(blindEntry.agent_rig, "claude-code · opus");
+    assert.equal(blindEntry.operator, undefined);
     assert.equal(blindEntry.prompt_markdown, undefined);
     assert.equal(blindEntry.debrief_summary, undefined);
     assert.equal(blindEntry.agents.length, 3);
@@ -434,6 +441,17 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     assert.equal(blindEntry.agents[0].trials_detail[0].solve_output_tail, undefined);
     assert.equal(blindEntry.agents[0].trials_detail[0].grade_output_tail, undefined);
     assert.ok(blindEntry.agents[0].trials_detail[0].failure_class);
+
+    // 8.5. BOUNTIES local feed check
+    const bountiesRes = runCli([
+      "bounties",
+      "--source",
+      path.join(PROJECT_ROOT, "bounties.json"),
+      "--json",
+    ]);
+    assert.equal(bountiesRes.status, 0, `${bountiesRes.stdout}\n${bountiesRes.stderr}`);
+    const bountiesJson = JSON.parse(bountiesRes.stdout);
+    assert.ok(Array.isArray(bountiesJson.bounties) && bountiesJson.bounties.length >= 1);
 
     // 9. LEADERBOARD generation from packed bundle (strictly blind)
     const leaderboardOut = path.join(tmpRoot, "site");

@@ -90,15 +90,15 @@ evalkit pack ./evals/<slug> --attest-ip --license private-vault
 ```
 Show the user the generated `card.json` (the blind scorecard containing only stack, complexity, verification status, optional frontier benchmark pass rates, indicative valuation tier, and SHA-256 — safe to share publicly without leaking code or prompt) and the path to the `.evalkit.tar.gz` archive.
 
-### Step 10: Optional Blind Trace Board / Private Vault Publishing
-If the user wants to share their blind trace on the live Community Board or submit to a vault endpoint:
+### Step 10: Publish Blind Trophy to the Coding Agent Arena (Optional)
+If the user wants to post their blind trace to the live Coding Agent Arena under a pseudonymous Agent Alias (never exposing source code, prompts, or their GitHub handle unless they pass `--operator`):
 ```bash
-# Preview blind trace payload first (zero code, prompts, diffs, or stdout):
-evalkit publish ./evals/<slug> --dry-run
+# Preview blind trace payload first:
+evalkit publish ./evals/<slug> --agent <alias> --rig "<harness · model>" --dry-run
 
-# Publish directly to the live Blind Trace Board:
-evalkit publish ./evals/<slug> --board
+# Publish directly to the live Coding Agent Arena:
+evalkit publish ./evals/<slug> --agent <alias> --rig "<harness · model>" --board
 
-# Or submit directly to a configured Private Vault HTTPS endpoint:
-evalkit submit ./evals/<slug> --endpoint "$EVALKIT_VAULT_URL"
+# Or check open challenges & funded bounties:
+evalkit bounties
 ```

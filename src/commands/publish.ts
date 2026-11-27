@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -21,13 +22,93 @@ import { c, printHeader, printInfo, printPass, printWarn } from "../utils/format
 
 export interface PublishOptions {
   bundleDir: string;
+  agentAlias?: string;
+  agentRig?: string;
+  operator?: string;
   board: boolean;
   boardRepo: string;
   gist: boolean;
   outFile?: string;
-  author?: string;
   dryRun: boolean;
   json: boolean;
+}
+
+const ADJECTIVES = [
+  "neon",
+  "cobalt",
+  "obsidian",
+  "quantum",
+  "velvet",
+  "crimson",
+  "astral",
+  "kinetic",
+  "silent",
+  "iron",
+  "hyper",
+  "solar",
+];
+
+const NOUNS = [
+  "warden",
+  "fox",
+  "falcon",
+  "sentinel",
+  "cipher",
+  "spark",
+  "vector",
+  "oracle",
+  "ghost",
+  "runner",
+  "nexus",
+  "pulse",
+];
+
+/**
+ * Generates or loads a persistent pseudonymous agent alias stored in ~/.evalkit/agent.json
+ * so developers keep a consistent Agent identity on the social board without exposing their real GitHub name.
+ */
+export function resolveOrCreateAgentAlias(explicitAlias?: string): string {
+  const cleaned = explicitAlias
+    ?.replace(/^@/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+  if (cleaned) return cleaned;
+
+  const configPath = path.join(os.homedir(), ".evalkit", "agent.json");
+  if (fs.existsSync(configPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as {
+        agent_alias?: string;
+      };
+      if (parsed.agent_alias && /^[a-z0-9_-]{2,32}$/i.test(parsed.agent_alias)) {
+        return parsed.agent_alias;
+      }
+    } catch {
+      // ignore corrupted config
+    }
+  }
+
+  const bytes = crypto.randomBytes(3);
+  const adj = ADJECTIVES[bytes[0] % ADJECTIVES.length];
+  const noun = NOUNS[bytes[1] % NOUNS.length];
+  const num = String(bytes[2] % 100).padStart(2, "0");
+  const generated = `${adj}-${noun}-${num}`;
+
+  try {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ agent_alias: generated, created_at: new Date().toISOString() }, null, 2),
+      "utf8"
+    );
+  } catch {
+    // non-fatal if home dir is read-only
+  }
+
+  return generated;
 }
 
 /**
@@ -36,7 +117,7 @@ export interface PublishOptions {
  */
 export function buildPublishedTrace(
   bundleDir: string,
-  author?: string
+  meta: { agentAlias?: string; agentRig?: string; operator?: string } = {}
 ): PublishedTraceEntry {
   const absDir = path.resolve(bundleDir);
   const evalYamlPath = path.join(absDir, "eval.yaml");
@@ -110,12 +191,19 @@ export function buildPublishedTrace(
     })),
   }));
 
+  const agentAlias = resolveOrCreateAgentAlias(meta.agentAlias);
+  const cleanedOperator = meta.operator?.replace(/^@/, "").trim() || undefined;
+  const openForVault =
+    config.ownership?.vault_open ?? config.ownership?.license === "private-vault";
+
   return {
     spec_version: config.spec_version,
     id: config.id,
     visibility: "blind",
     published_at: new Date().toISOString(),
-    ...(author ? { author } : {}),
+    agent_alias: agentAlias,
+    ...(meta.agentRig ? { agent_rig: meta.agentRig.trim() } : {}),
+    ...(cleanedOperator ? { operator: cleanedOperator } : {}),
     stack: config.stack,
     category: config.category,
     complexity: {
@@ -134,6 +222,18 @@ export function buildPublishedTrace(
       verified_at: verifyValid && verifyReport ? verifyReport.verified_at : null,
     },
     valuation,
+    vault: {
+      open_for_licensing: openForVault,
+      ...(config.ownership?.reserve_non_exclusive_usd !== undefined
+        ? { reserve_non_exclusive_usd: config.ownership.reserve_non_exclusive_usd }
+        : {}),
+      ...(config.ownership?.reserve_exclusive_usd !== undefined
+        ? { reserve_exclusive_usd: config.ownership.reserve_exclusive_usd }
+        : {}),
+      ...(config.ownership?.allow_rl_training !== undefined
+        ? { allow_rl_training: config.ownership.allow_rl_training }
+        : {}),
+    },
     bundle_sha256: bundleSha,
     license: config.ownership?.license ?? "private-vault",
     agents,
@@ -160,6 +260,7 @@ function renderBlindTraceMarkdown(entry: PublishedTraceEntry): string {
 
 > Blind Trace only: zero source code, prompts, diffs, or raw stdout are published, keeping this eval uncontaminated.
 
+- **Agent Alias:** \`@${entry.agent_alias}\`${entry.agent_rig ? ` (${entry.agent_rig})` : ""}${entry.operator ? ` · operator: \`@${entry.operator}\`` : ""}
 - **Visibility:** \`blind\`
 - **Stack:** ${entry.stack.map((s) => `\`${s}\``).join(", ")}
 - **Category:** \`${entry.category}\`
@@ -189,7 +290,6 @@ export function runPublish(options: PublishOptions): number {
     throw new Error(`Missing eval.yaml in ${absDir}`);
   }
 
-  // Enforce audit gate before publishing anywhere
   const audit = auditBundle(absDir);
   if (!audit.passed) {
     throw new Error(
@@ -197,7 +297,11 @@ export function runPublish(options: PublishOptions): number {
     );
   }
 
-  const entry = buildPublishedTrace(absDir, options.author);
+  const entry = buildPublishedTrace(absDir, {
+    agentAlias: options.agentAlias,
+    agentRig: options.agentRig,
+    operator: options.operator,
+  });
   const markdown = renderBlindTraceMarkdown(entry);
 
   if (options.outFile) {
@@ -217,10 +321,10 @@ export function runPublish(options: PublishOptions): number {
     if (options.json) {
       console.log(JSON.stringify({ dry_run: true, entry }, null, 2));
     } else {
-      printHeader(`Blind trace preview: ${entry.id}`);
+      printHeader(`Blind trace preview: ${entry.id} by @${entry.agent_alias}`);
       printWarn("Dry run — nothing was uploaded. Zero source code, diffs, or prompts included.");
       printInfo(
-        `Agents: ${entry.agents.map((a) => `${a.agent}=${a.passed}/${a.trials}`).join(", ") || "none"}`
+        `Agents tested: ${entry.agents.map((a) => `${a.agent}=${a.passed}/${a.trials}`).join(", ") || "none"}`
       );
       printInfo(`Size: ${Buffer.byteLength(markdown, "utf8")} bytes`);
       console.log(c.dim("\n" + JSON.stringify(entry, null, 2).slice(0, 1200) + "\n"));
@@ -243,7 +347,7 @@ export function runPublish(options: PublishOptions): number {
           "create",
           "--public",
           "--desc",
-          `evalkit blind trace: ${entry.id}`,
+          `evalkit blind trace (@${entry.agent_alias}): ${entry.id}`,
           tmpFile,
         ],
         { timeoutMs: 30_000 }
@@ -255,7 +359,7 @@ export function runPublish(options: PublishOptions): number {
       if (options.json) {
         console.log(JSON.stringify({ published: true, target: "gist", url: gistUrl, entry }, null, 2));
       } else {
-        printPass(`Published blind trace Gist → ${gistUrl}`);
+        printPass(`Published blind trace Gist (@${entry.agent_alias}) → ${gistUrl}`);
       }
       return 0;
     } finally {
@@ -268,7 +372,7 @@ export function runPublish(options: PublishOptions): number {
     if (ghCheck.exitCode !== 0) {
       throw new Error("GitHub CLI (`gh`) is required for --board publishing.");
     }
-    const title = `[Board] ${entry.id} (blind · ${entry.stack.slice(0, 3).join(", ")})`;
+    const title = `[Board] @${entry.agent_alias} · ${entry.id} (${entry.stack.slice(0, 3).join(", ")})`;
     const res = execSyncSafe(
       "gh",
       [
@@ -289,19 +393,29 @@ export function runPublish(options: PublishOptions): number {
       throw new Error(`Publishing to board failed: ${res.stderr.trim()}`);
     }
     const issueUrl = res.stdout.trim();
-    const boardLink = `https://${options.boardRepo.split("/")[0]}.github.io/${options.boardRepo.split("/")[1]}/#task=${encodeURIComponent(entry.id)}`;
+    const [owner, repo] = options.boardRepo.split("/");
+    const boardLink = `https://${owner}.github.io/${repo}/#task=${encodeURIComponent(entry.id)}`;
+    const agentLink = `https://${owner}.github.io/${repo}/#agent=${encodeURIComponent(entry.agent_alias)}`;
     if (options.json) {
       console.log(
         JSON.stringify(
-          { published: true, target: "board", issue_url: issueUrl, board_url: boardLink, entry },
+          {
+            published: true,
+            target: "board",
+            issue_url: issueUrl,
+            board_url: boardLink,
+            agent_url: agentLink,
+            entry,
+          },
           null,
           2
         )
       );
     } else {
-      printHeader(`Published blind trace to evalkit Board`);
-      printPass(`GitHub Board Issue → ${issueUrl}`);
-      printPass(`Live Board Link    → ${boardLink}`);
+      printHeader(`Published blind trace by @${entry.agent_alias}`);
+      printPass(`GitHub Board Post  → ${issueUrl}`);
+      printPass(`Live Trophy Link   → ${boardLink}`);
+      printPass(`Agent Profile Link → ${agentLink}`);
       console.log("");
     }
     return 0;
@@ -311,8 +425,10 @@ export function runPublish(options: PublishOptions): number {
     if (options.json) {
       console.log(JSON.stringify({ published: false, entry }, null, 2));
     } else {
-      printHeader(`Built blind trace for ${entry.id}`);
-      printInfo("Pass `--board` (publish to live GitHub Pages board), `--gist` (create shareable Gist), or `--out <file.json|md>` to save locally.");
+      printHeader(`Built blind trace for ${entry.id} (@${entry.agent_alias})`);
+      printInfo(
+        "Pass `--board` (publish to live Agent Network), `--gist` (create shareable Gist), or `--out <file.json|md>` to save locally."
+      );
       console.log("");
     }
   }
