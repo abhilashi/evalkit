@@ -118,14 +118,28 @@ Enforces `audit` + fresh verification checksum + IP ownership attestation, autom
 evalkit pack ./evals/webhook-race --attest-ip --license private-vault
 ```
 
-### 8. Generate a static leaderboard (`docs/`)
-Aggregates all `card.json` files in a directory into a standalone HTML + JSON leaderboard ready for GitHub Pages:
+### 8. Publish traces to the live Community Board (or GitHub Gist)
+Publish directly from your terminal onto the live [Community Trace & Eval Board](https://abhilashi.github.io/evalkit/). Private Vault tasks default to `--redacted` (zero code, diffs, or prompts leave your machine); open-source tasks publish full interactive failure traces with clickable logs and diffs:
+
+```bash
+# Preview the exact public or redacted trace payload first
+evalkit publish ./evals/webhook-race --dry-run
+
+# Publish directly to the live GitHub Pages Community Board (via evalkit-board label)
+evalkit publish ./evals/webhook-race --board
+
+# Or create a standalone shareable GitHub Gist
+evalkit publish ./evals/webhook-race --gist
+```
+
+### 9. Generate a static board (`docs/`)
+Aggregates all eval bundles and `card.json` files in a directory into a standalone interactive HTML + JSON Trace Board ready for GitHub Pages (automatically live-syncing community posts tagged `evalkit-board`):
 
 ```bash
 evalkit leaderboard ./examples --out ./docs
 ```
 
-### 9. Submit to the Private Vault (blind card or full bundle)
+### 10. Submit to the Private Vault (blind card or full bundle)
 Preview what leaves your machine (`--dry-run`), submit a **blind `card.json` only** via GitHub Issues (`--github-issue`, zero source code exposed), or push to a Private Vault HTTPS endpoint (`--endpoint` / `EVALKIT_VAULT_URL`):
 
 ```bash
@@ -178,6 +192,7 @@ A minimal Cloudflare Worker + R2 intake endpoint ships in [`vault-worker/`](vaul
 - **v0.2 (Shipped):** `evalkit bench` multi-agent runner (`claude`, `codex`, `gemini`, `opencode`, `--cmd`), auto-embedded benchmark scores in `card.json`, GitHub Actions CI, and 1-command `npx` install.
 - **v0.3 (Shipped):** Verified showcase evals (`examples/`), `evalkit leaderboard` static GitHub Pages generator (`docs/`), `evalkit submit` (dry-run, `--github-issue` blind card, HTTPS vault API), and deployable Cloudflare Worker intake (`vault-worker/`).
 - **v0.4 (Shipped):** Transparent Signal Score (`0-100`), Tier (`S`/`A`/`B`/`C`), indicative market valuation estimator (`evalkit estimate`), embedded into `card.json` and the live leaderboard.
+- **v0.5 (Shipped):** Interactive Community Trace & Eval Board (`docs/` with slide-over Trace Inspector, `#task=<id>` shareable links, live `evalkit-board` community sync) + `evalkit publish` (`--board`, `--gist`, automatic `--redacted` protection for Private Vault bundles).
 
 ---
 

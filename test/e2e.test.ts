@@ -414,7 +414,30 @@ Agents often added a module-level global Set instead of storing processed IDs pe
       2
     );
 
-    // 8. LEADERBOARD generation from packed bundle
+    // 8. PUBLISH safety checks (private-vault refuses --public without --force-public; defaults to redacted)
+    const pubBlocked = runCli(["publish", bundleDir, "--public", "--dry-run", "--json"]);
+    assert.equal(pubBlocked.status, 1);
+
+    const traceOutPath = path.join(tmpRoot, "trace-redacted.json");
+    const pubRedacted = runCli([
+      "publish",
+      bundleDir,
+      "--out",
+      traceOutPath,
+      "--dry-run",
+      "--json",
+    ]);
+    assert.equal(pubRedacted.status, 0, `${pubRedacted.stdout}\n${pubRedacted.stderr}`);
+    const redactedEntry = JSON.parse(fs.readFileSync(traceOutPath, "utf8"));
+    assert.equal(redactedEntry.visibility, "redacted");
+    assert.equal(redactedEntry.prompt_markdown, undefined);
+    assert.equal(redactedEntry.agents.length, 3);
+    // Ensure redacted trace strips code diffs and raw logs
+    assert.equal(redactedEntry.agents[0].trials_detail[0].patch_preview, undefined);
+    assert.equal(redactedEntry.agents[0].trials_detail[0].grade_output_tail, undefined);
+    assert.ok(redactedEntry.agents[0].trials_detail[0].failure_class);
+
+    // 9. LEADERBOARD generation from packed bundle
     const leaderboardOut = path.join(tmpRoot, "site");
     const lbRes = runCli([
       "leaderboard",
@@ -427,10 +450,11 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     const lbJson = JSON.parse(lbRes.stdout);
     assert.equal(lbJson.summary.total_tasks, 1);
     assert.equal(lbJson.summary.verified_tasks, 1);
+    assert.equal(lbJson.summary.redacted_traces, 1);
     assert.equal(fs.existsSync(path.join(leaderboardOut, "index.html")), true);
     assert.equal(fs.existsSync(path.join(leaderboardOut, "data.json")), true);
 
-    // 9. SUBMIT dry-run + live local HTTP intake test
+    // 10. SUBMIT dry-run + live local HTTP intake test
     const drySubmit = runCli(["submit", bundleDir, "--dry-run", "--json"]);
     assert.equal(drySubmit.status, 0, `${drySubmit.stdout}\n${drySubmit.stderr}`);
     const dryJson = JSON.parse(drySubmit.stdout);

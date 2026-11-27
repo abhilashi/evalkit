@@ -188,6 +188,26 @@ function captureWorkspacePatch(
   return { filesChanged, insertions, deletions };
 }
 
+function classifyFailure(passed: boolean, timedOut: boolean, output: string): string {
+  if (passed) return "PASS";
+  if (timedOut) return "TIMEOUT";
+  if (/AssertionError|ERR_ASSERTION|expect\(|assert\./i.test(output)) return "ASSERTION_ERROR";
+  if (/SyntaxError|TypeError|ReferenceError|RangeError/i.test(output)) return "RUNTIME_ERROR";
+  if (/Cannot find module|MODULE_NOT_FOUND|ImportError|ModuleNotFoundError/i.test(output)) {
+    return "IMPORT_ERROR";
+  }
+  if (/ECONNREFUSED|ENOTFOUND|network|fetch failed/i.test(output)) return "NETWORK_BLOCKED";
+  if (/patch failed|does not apply|git apply/i.test(output)) return "PATCH_APPLY_ERROR";
+  return "TEST_FAILURE";
+}
+
+function readPatchPreview(patchPath: string, maxBytes = 8192): string {
+  if (!fs.existsSync(patchPath)) return "";
+  const raw = fs.readFileSync(patchPath, "utf8");
+  if (raw.length <= maxBytes) return raw;
+  return `${raw.slice(0, maxBytes)}\n... [truncated ${raw.length - maxBytes} chars]`;
+}
+
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
@@ -313,10 +333,12 @@ export function runBench(options: BenchOptions): number {
         let solveExit = 0;
         let solveDurationMs = 0;
         let solveTimedOut = false;
+        let solveOutputTail = "";
 
         if (runner.kind === "builtin-noop") {
           solveExit = 0;
           solveDurationMs = 0;
+          solveOutputTail = "(noop baseline: no edits applied)";
         } else if (runner.kind === "builtin-oracle") {
           const applyRes = execSyncSafe(
             "git",
@@ -325,6 +347,10 @@ export function runBench(options: BenchOptions): number {
           );
           solveExit = applyRes.exitCode;
           solveDurationMs = applyRes.durationMs;
+          solveOutputTail =
+            applyRes.exitCode === 0
+              ? "(oracle baseline: applied verified gold.patch)"
+              : tailOutput(applyRes.stdout, applyRes.stderr);
         } else if (runner.kind === "cli" && runner.cmd && runner.buildArgs) {
           const solveRes = execSyncSafe(
             runner.cmd,
@@ -341,6 +367,7 @@ export function runBench(options: BenchOptions): number {
           solveExit = solveRes.exitCode;
           solveDurationMs = solveRes.durationMs;
           solveTimedOut = solveRes.timedOut;
+          solveOutputTail = tailOutput(solveRes.stdout, solveRes.stderr, 40);
         } else if (runner.kind === "custom" && runner.shellCmd) {
           const interpolated = runner.shellCmd
             .replace(/\{prompt_file\}/g, safePromptPath)
@@ -357,10 +384,12 @@ export function runBench(options: BenchOptions): number {
           solveExit = solveRes.exitCode;
           solveDurationMs = solveRes.durationMs;
           solveTimedOut = solveRes.timedOut;
+          solveOutputTail = tailOutput(solveRes.stdout, solveRes.stderr, 40);
         }
 
         // 2. Capture produced patch
         const diffStats = captureWorkspacePatch(workspaceDir, agentPatchPath);
+        const patchPreview = readPatchPreview(agentPatchPath);
 
         // 3. Grade phase (isolated from agent, offline in Docker mode)
         let gradeExit = 1;
@@ -408,6 +437,7 @@ export function runBench(options: BenchOptions): number {
         }
 
         const passed = gradeExit === 0;
+        const failureClass = classifyFailure(passed, solveTimedOut, outputTail);
         trialResults.push({
           trial: t,
           passed,
@@ -419,6 +449,9 @@ export function runBench(options: BenchOptions): number {
           insertions: diffStats.insertions,
           deletions: diffStats.deletions,
           solve_timed_out: solveTimedOut,
+          failure_class: failureClass,
+          solve_output_tail: solveOutputTail,
+          patch_preview: patchPreview,
           output_tail: outputTail,
         });
 

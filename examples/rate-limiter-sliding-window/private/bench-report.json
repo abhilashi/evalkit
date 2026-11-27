@@ -1,7 +1,7 @@
 {
   "spec_version": "0.1",
   "id": "rate-limiter-sliding-window",
-  "benchmarked_at": "2026-11-26T21:11:13.626Z",
+  "benchmarked_at": "2026-11-27T05:46:49.162Z",
   "bundle_sha256": "65290d38b65986a1e4beca73d9c436850e34f5380b1a29c41b58a151062538ba",
   "grade_sandbox": "local",
   "network_isolated_grading": false,
@@ -22,12 +22,15 @@
           "solve_exit_code": 0,
           "grade_exit_code": 1,
           "solve_duration_ms": 0,
-          "grade_duration_ms": 142,
+          "grade_duration_ms": 143,
           "files_changed": 0,
           "insertions": 0,
           "deletions": 0,
           "solve_timed_out": false,
-          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.070291ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-8V8ynZ/noop-1/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
+          "failure_class": "ASSERTION_ERROR",
+          "solve_output_tail": "(noop baseline: no edits applied)",
+          "patch_preview": "",
+          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.061458ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-5PmyJ9/noop-1/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
         },
         {
           "trial": 2,
@@ -35,12 +38,15 @@
           "solve_exit_code": 0,
           "grade_exit_code": 1,
           "solve_duration_ms": 0,
-          "grade_duration_ms": 142,
+          "grade_duration_ms": 140,
           "files_changed": 0,
           "insertions": 0,
           "deletions": 0,
           "solve_timed_out": false,
-          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.069625ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-8V8ynZ/noop-2/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
+          "failure_class": "ASSERTION_ERROR",
+          "solve_output_tail": "(noop baseline: no edits applied)",
+          "patch_preview": "",
+          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.091291ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-5PmyJ9/noop-2/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
         },
         {
           "trial": 3,
@@ -48,12 +54,15 @@
           "solve_exit_code": 0,
           "grade_exit_code": 1,
           "solve_duration_ms": 0,
-          "grade_duration_ms": 144,
+          "grade_duration_ms": 141,
           "files_changed": 0,
           "insertions": 0,
           "deletions": 0,
           "solve_timed_out": false,
-          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.062125ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-8V8ynZ/noop-3/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
+          "failure_class": "ASSERTION_ERROR",
+          "solve_output_tail": "(noop baseline: no edits applied)",
+          "patch_preview": "",
+          "output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.077083ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-5PmyJ9/noop-3/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }"
         }
       ]
     },
@@ -72,25 +81,31 @@
           "solve_exit_code": 0,
           "grade_exit_code": 0,
           "solve_duration_ms": 9,
-          "grade_duration_ms": 141,
+          "grade_duration_ms": 145,
           "files_changed": 1,
           "insertions": 39,
           "deletions": 7,
           "solve_timed_out": false,
-          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.595292ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.314667ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.570375ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.051625ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.994042"
+          "failure_class": "PASS",
+          "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+          "patch_preview": "diff --git a/src/limiter.mjs b/src/limiter.mjs\nindex f92053c..bbfba58 100644\n--- a/src/limiter.mjs\n+++ b/src/limiter.mjs\n@@ -1,23 +1,55 @@\n export function createRateLimiter({ limit, windowMs }) {\n+  if (!Number.isInteger(limit) || limit <= 0) {\n+    throw new Error(\"limit must be a positive integer\");\n+  }\n+  if (typeof windowMs !== \"number\" || windowMs <= 0) {\n+    throw new Error(\"windowMs must be positive\");\n+  }\n+\n   const buckets = new Map();\n \n+  function pruneExpired(now) {\n+    const cutoff = now - windowMs;\n+    for (const [k, timestamps] of buckets.entries()) {\n+      let firstValid = 0;\n+      while (firstValid < timestamps.length && timestamps[firstValid] <= cutoff) {\n+        firstValid++;\n+      }\n+      if (firstValid === timestamps.length) {\n+        buckets.delete(k);\n+      } else if (firstValid > 0) {\n+        timestamps.splice(0, firstValid);\n+      }\n+    }\n+  }\n+\n   function check(key, now = Date.now()) {\n-    const windowId = Math.floor(now / windowMs);\n-    const bucketKey = `${key}:${windowId}`;\n-    const count = buckets.get(bucketKey) ?? 0;\n+    pruneExpired(now);\n \n-    if (count >= limit) {\n+    const timestamps = buckets.get(key) ?? [];\n+    if (timestamps.length >= limit) {\n+      const oldest = timestamps[0];\n+      const retryAfterMs = Math.max(1, oldest + windowMs - now);\n       return {\n         allowed: false,\n         remaining: 0,\n-        retryAfterMs: windowMs,\n+        retryAfterMs,\n       };\n     }\n \n-    buckets.set(bucketKey, count + 1);\n+    // Keep timestamps sorted even if minor clock jitter produces an out-of-order timestamp\n+    if (timestamps.length === 0 || now >= timestamps[timestamps.length - 1]) {\n+      timestamps.push(now);\n+    } else {\n+      let idx = timestamps.length - 1;\n+      while (idx > 0 && timestamps[idx - 1] > now) idx--;\n+      timestamps.splice(idx, 0, now);\n+    }\n+\n+    buckets.set(key, timestamps);\n     return {\n       allowed: true,\n-      remaining: limit - (count + 1),\n+      remaining: limit - timestamps.length,\n       retryAfterMs: 0,\n     };\n   }\n",
+          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.615667ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.335667ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.508709ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.052792ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 38.577458"
         },
         {
           "trial": 2,
           "passed": true,
           "solve_exit_code": 0,
           "grade_exit_code": 0,
-          "solve_duration_ms": 10,
-          "grade_duration_ms": 141,
+          "solve_duration_ms": 9,
+          "grade_duration_ms": 142,
           "files_changed": 1,
           "insertions": 39,
           "deletions": 7,
           "solve_timed_out": false,
-          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.750458ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.373667ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.5645ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.063875ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.925667"
+          "failure_class": "PASS",
+          "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+          "patch_preview": "diff --git a/src/limiter.mjs b/src/limiter.mjs\nindex f92053c..bbfba58 100644\n--- a/src/limiter.mjs\n+++ b/src/limiter.mjs\n@@ -1,23 +1,55 @@\n export function createRateLimiter({ limit, windowMs }) {\n+  if (!Number.isInteger(limit) || limit <= 0) {\n+    throw new Error(\"limit must be a positive integer\");\n+  }\n+  if (typeof windowMs !== \"number\" || windowMs <= 0) {\n+    throw new Error(\"windowMs must be positive\");\n+  }\n+\n   const buckets = new Map();\n \n+  function pruneExpired(now) {\n+    const cutoff = now - windowMs;\n+    for (const [k, timestamps] of buckets.entries()) {\n+      let firstValid = 0;\n+      while (firstValid < timestamps.length && timestamps[firstValid] <= cutoff) {\n+        firstValid++;\n+      }\n+      if (firstValid === timestamps.length) {\n+        buckets.delete(k);\n+      } else if (firstValid > 0) {\n+        timestamps.splice(0, firstValid);\n+      }\n+    }\n+  }\n+\n   function check(key, now = Date.now()) {\n-    const windowId = Math.floor(now / windowMs);\n-    const bucketKey = `${key}:${windowId}`;\n-    const count = buckets.get(bucketKey) ?? 0;\n+    pruneExpired(now);\n \n-    if (count >= limit) {\n+    const timestamps = buckets.get(key) ?? [];\n+    if (timestamps.length >= limit) {\n+      const oldest = timestamps[0];\n+      const retryAfterMs = Math.max(1, oldest + windowMs - now);\n       return {\n         allowed: false,\n         remaining: 0,\n-        retryAfterMs: windowMs,\n+        retryAfterMs,\n       };\n     }\n \n-    buckets.set(bucketKey, count + 1);\n+    // Keep timestamps sorted even if minor clock jitter produces an out-of-order timestamp\n+    if (timestamps.length === 0 || now >= timestamps[timestamps.length - 1]) {\n+      timestamps.push(now);\n+    } else {\n+      let idx = timestamps.length - 1;\n+      while (idx > 0 && timestamps[idx - 1] > now) idx--;\n+      timestamps.splice(idx, 0, now);\n+    }\n+\n+    buckets.set(key, timestamps);\n     return {\n       allowed: true,\n-      remaining: limit - (count + 1),\n+      remaining: limit - timestamps.length,\n       retryAfterMs: 0,\n     };\n   }\n",
+          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.688458ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.374833ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.555ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.055625ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.99925"
         },
         {
           "trial": 3,
@@ -98,12 +113,15 @@
           "solve_exit_code": 0,
           "grade_exit_code": 0,
           "solve_duration_ms": 9,
-          "grade_duration_ms": 146,
+          "grade_duration_ms": 139,
           "files_changed": 1,
           "insertions": 39,
           "deletions": 7,
           "solve_timed_out": false,
-          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.63425ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.32375ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.520792ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.064459ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.475583"
+          "failure_class": "PASS",
+          "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+          "patch_preview": "diff --git a/src/limiter.mjs b/src/limiter.mjs\nindex f92053c..bbfba58 100644\n--- a/src/limiter.mjs\n+++ b/src/limiter.mjs\n@@ -1,23 +1,55 @@\n export function createRateLimiter({ limit, windowMs }) {\n+  if (!Number.isInteger(limit) || limit <= 0) {\n+    throw new Error(\"limit must be a positive integer\");\n+  }\n+  if (typeof windowMs !== \"number\" || windowMs <= 0) {\n+    throw new Error(\"windowMs must be positive\");\n+  }\n+\n   const buckets = new Map();\n \n+  function pruneExpired(now) {\n+    const cutoff = now - windowMs;\n+    for (const [k, timestamps] of buckets.entries()) {\n+      let firstValid = 0;\n+      while (firstValid < timestamps.length && timestamps[firstValid] <= cutoff) {\n+        firstValid++;\n+      }\n+      if (firstValid === timestamps.length) {\n+        buckets.delete(k);\n+      } else if (firstValid > 0) {\n+        timestamps.splice(0, firstValid);\n+      }\n+    }\n+  }\n+\n   function check(key, now = Date.now()) {\n-    const windowId = Math.floor(now / windowMs);\n-    const bucketKey = `${key}:${windowId}`;\n-    const count = buckets.get(bucketKey) ?? 0;\n+    pruneExpired(now);\n \n-    if (count >= limit) {\n+    const timestamps = buckets.get(key) ?? [];\n+    if (timestamps.length >= limit) {\n+      const oldest = timestamps[0];\n+      const retryAfterMs = Math.max(1, oldest + windowMs - now);\n       return {\n         allowed: false,\n         remaining: 0,\n-        retryAfterMs: windowMs,\n+        retryAfterMs,\n       };\n     }\n \n-    buckets.set(bucketKey, count + 1);\n+    // Keep timestamps sorted even if minor clock jitter produces an out-of-order timestamp\n+    if (timestamps.length === 0 || now >= timestamps[timestamps.length - 1]) {\n+      timestamps.push(now);\n+    } else {\n+      let idx = timestamps.length - 1;\n+      while (idx > 0 && timestamps[idx - 1] > now) idx--;\n+      timestamps.splice(idx, 0, now);\n+    }\n+\n+    buckets.set(key, timestamps);\n     return {\n       allowed: true,\n-      remaining: limit - (count + 1),\n+      remaining: limit - timestamps.length,\n       retryAfterMs: 0,\n     };\n   }\n",
+          "output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.588666ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.317625ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.519042ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.092833ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.737417"
         }
       ]
     }

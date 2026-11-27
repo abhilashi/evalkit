@@ -9,11 +9,12 @@ import { runBench } from "./commands/bench.js";
 import { runEstimate } from "./commands/estimate.js";
 import { runPack } from "./commands/pack.js";
 import { runLeaderboard } from "./commands/leaderboard.js";
+import { runPublish } from "./commands/publish.js";
 import { runSubmit } from "./commands/submit.js";
 import { runInstallSkill } from "./commands/install-skill.js";
 import { c, printFail } from "./utils/format.js";
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 function printHelp(): void {
   console.log(`
@@ -31,7 +32,8 @@ ${c.bold("COMMANDS")}
   ${c.cyan("bench")}          Benchmark coding agents (claude, codex, gemini, custom) on a bundle
   ${c.cyan("estimate")}       Compute Signal Score (0–100), Tier, and indicative market value range
   ${c.cyan("pack")}           Validate, attest IP ownership, generate blind scorecard (card.json) + .tar.gz
-  ${c.cyan("leaderboard")}    Generate a static HTML + JSON leaderboard from verified card.json bundles
+  ${c.cyan("leaderboard")}    Generate the interactive Community Trace & Eval Board (HTML + JSON)
+  ${c.cyan("publish")}        Publish a public or redacted failure trace to the live board / Gist
   ${c.cyan("submit")}         Submit a blind scorecard (or full bundle) to the Private Vault or GitHub
 
 ${c.bold("EXAMPLES")}
@@ -41,9 +43,10 @@ ${c.bold("EXAMPLES")}
   evalkit audit ./evals/webhook-race
   evalkit verify ./evals/webhook-race --runs 3
   evalkit bench ./evals/webhook-race --agents claude,codex,gemini --trials 3
+  evalkit estimate ./evals/webhook-race
   evalkit pack ./evals/webhook-race --attest-ip --license private-vault
+  evalkit publish ./evals/webhook-race --board
   evalkit leaderboard ./examples --out ./docs
-  evalkit submit ./evals/webhook-race --dry-run
 
 Run ${c.dim("evalkit <command> --help")} for command-specific flags.
 `);
@@ -333,6 +336,52 @@ async function main(): Promise<void> {
           outDir: values.out,
           title: values.title,
           repoUrl: values["repo-url"],
+          json: values.json,
+        });
+        break;
+      }
+
+      case "publish":
+      case "share": {
+        const { values, positionals } = parseArgs({
+          args: subArgs,
+          allowPositionals: true,
+          options: {
+            public: { type: "boolean", default: false },
+            redacted: { type: "boolean", default: false },
+            "force-public": { type: "boolean", default: false },
+            board: { type: "boolean", default: false },
+            "board-repo": { type: "string", default: "abhilashi/evalkit" },
+            gist: { type: "boolean", default: false },
+            out: { type: "string", short: "o" },
+            author: { type: "string" },
+            "dry-run": { type: "boolean", default: false },
+            json: { type: "boolean", default: false },
+            help: { type: "boolean", short: "h", default: false },
+          },
+        });
+        if (values.help || !positionals[0]) {
+          console.log(
+            "Usage: evalkit publish <bundle-dir> [--board] [--board-repo owner/repo] [--gist] [--out trace.json|md] [--public|--redacted] [--force-public] [--author handle] [--dry-run] [--json]"
+          );
+          process.exitCode = values.help ? 0 : 1;
+          return;
+        }
+        const visibility = values.public
+          ? "public"
+          : values.redacted
+            ? "redacted"
+            : undefined;
+        exitCode = runPublish({
+          bundleDir: positionals[0],
+          visibility,
+          forcePublic: values["force-public"],
+          board: values.board,
+          boardRepo: values["board-repo"],
+          gist: values.gist,
+          outFile: values.out,
+          author: values.author,
+          dryRun: values["dry-run"],
           json: values.json,
         });
         break;

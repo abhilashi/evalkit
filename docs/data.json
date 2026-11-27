@@ -1,10 +1,13 @@
 {
-  "generated_at": "2026-11-27T05:19:33.309Z",
+  "generated_at": "2026-11-27T05:46:50.923Z",
   "title": "evalkit — Real-World Indie Coding Evals",
   "repo_url": "https://github.com/abhilashi/evalkit",
+  "github_repo": "abhilashi/evalkit",
   "summary": {
     "total_tasks": 3,
     "verified_tasks": 3,
+    "public_traces": 3,
+    "redacted_traces": 0,
     "stacks": [
       "api",
       "auth",
@@ -38,10 +41,13 @@
       "avg_solve_ms": 0
     }
   ],
-  "tasks": [
+  "entries": [
     {
       "spec_version": "0.1",
       "id": "jwt-session-rotation-race",
+      "title": "fix: add concurrent refresh grace window and family-wide theft revocation",
+      "visibility": "public",
+      "published_at": "2026-11-27T05:46:50.917Z",
       "stack": [
         "node",
         "javascript",
@@ -60,27 +66,6 @@
         "network_isolated": false,
         "gold_pass_rate": "3/3",
         "verified_at": "2026-11-26T21:55:06.135Z"
-      },
-      "benchmark": {
-        "benchmarked_at": "2026-11-26T21:11:10.844Z",
-        "grade_sandbox": "local",
-        "trials_per_agent": 3,
-        "results": [
-          {
-            "agent": "noop",
-            "passed": 0,
-            "trials": 3,
-            "pass_rate": 0,
-            "avg_solve_ms": 0
-          },
-          {
-            "agent": "oracle",
-            "passed": 3,
-            "trials": 3,
-            "pass_rate": 1,
-            "avg_solve_ms": 9
-          }
-        ]
       },
       "valuation": {
         "tier": "UNBENCHMARKED",
@@ -134,16 +119,119 @@
         ],
         "disclaimer": "Indicative market estimate based on RL-environment & SWE-eval benchmarks; not a guaranteed payout. Actual payouts depend on buyer match and server-side QA."
       },
-      "ownership": {
-        "author_attestation": true,
-        "license": "mit"
-      },
       "bundle_sha256": "f91561c2e52ec67192432565ef2d8d7c09633fad9420656fc895db711c1a941b",
-      "packed_at": "2026-11-27T05:19:33.079Z"
+      "license": "mit",
+      "prompt_markdown": "# Task: Fix Refresh-Token Rotation Race & Family Reuse Revocation\n\n## Problem Statement\n\nOur SaaS authentication service rotates refresh tokens on every use, but users with multiple open browser tabs get randomly logged out when two tabs trigger a refresh concurrently. At the same time, we do not currently revoke the rest of a session family when an attacker replays an expired/stolen refresh token.\n\n## Expected Behavior\n\nUpdate `createSessionManager({ graceWindowMs })` to support both concurrent-tab grace replay and family-wide theft revocation:\n\n1. **Grace-window idempotency:** When an already-rotated token `T1` is passed to `rotate(T1, now)` within `0 <= (now - rotatedAt) <= graceWindowMs` **and** its direct replacement `T2` is still the active (unrotated) head of the family, return `{ token: T2, familyId, userId, replayedWithinGrace: true }` without minting a new token or revoking the family. Normal rotations must return `replayedWithinGrace: false`.\n2. **Reuse detection & family revocation:** If an already-rotated token is presented to `rotate()` *outside* `graceWindowMs`, OR if its direct child has already been rotated further (i.e., an ancestor >1 hop behind the current head is replayed, even within `graceWindowMs`), immediately revoke the entire `familyId` and throw an Error.\n3. **Post-revocation enforcement:** Once a `familyId` is revoked:\n   - `isFamilyRevoked(familyId)` must return `true` (and `false` otherwise).\n   - `isActive(token)` must return `false` for all tokens in that family (including the previously active head).\n   - Any further `rotate()` call using any token in that family must throw an Error.\n\n## Constraints\n\n- Preserve existing `issue`, `rotate`, and `isActive` signatures and baseline behavior.\n- All tests run strictly offline.\n",
+      "debrief_summary": "# Frontier Failure Debrief: jwt-session-rotation-race\n\n## 1. Root Cause & Non-Obvious Trap\nRefresh token rotation must distinguish benign parallel browser-tab races (replaying the immediate parent within a few seconds while the child is still the head) from genuine replay attacks (replaying after the grace window OR replaying an older ancestor two hops back).\n\n## 2. Naive Fixes That Fail\n- Allowing *any* token rotated within `graceWindowMs` to replay misses the 2-hop attack where `T1 -> T2 -> T3` all happened within 1 second and `T1` is replayed.\n- Rejecting a reused token without revoking the entire `familyId` leaves the attacker's rotated child session active.\n\n## 3. Where AI Coding Agents Got Stuck\nAgents commonly forget the `childIsStillHead` check or mint a *brand new* token on grace replay instead of returning the exact existing child token idempotently.\n",
+      "agents": [
+        {
+          "agent": "noop",
+          "passed": 0,
+          "trials": 3,
+          "pass_rate": 0,
+          "avg_solve_ms": 0,
+          "avg_insertions": 0,
+          "avg_deletions": 0,
+          "trials_detail": [
+            {
+              "trial": 1,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 165,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "RUNTIME_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "    expected: false,\n    operator: 'strictEqual'\n  }\n\ntest at test/rotation-race.test.mjs:21:1\n✖ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.12125ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-kJLzWG/noop-1/workspace/test/rotation-race.test.mjs:28:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3)\n\ntest at test/rotation-race.test.mjs:35:1\n✖ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.095458ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-kJLzWG/noop-1/workspace/test/rotation-race.test.mjs:43:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)",
+              "patch_preview": ""
+            },
+            {
+              "trial": 2,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 145,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "RUNTIME_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "    expected: false,\n    operator: 'strictEqual'\n  }\n\ntest at test/rotation-race.test.mjs:21:1\n✖ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.108083ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-kJLzWG/noop-2/workspace/test/rotation-race.test.mjs:28:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3)\n\ntest at test/rotation-race.test.mjs:35:1\n✖ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.096666ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-kJLzWG/noop-2/workspace/test/rotation-race.test.mjs:43:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)",
+              "patch_preview": ""
+            },
+            {
+              "trial": 3,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 146,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "RUNTIME_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "    expected: false,\n    operator: 'strictEqual'\n  }\n\ntest at test/rotation-race.test.mjs:21:1\n✖ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.245708ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-kJLzWG/noop-3/workspace/test/rotation-race.test.mjs:28:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3)\n\ntest at test/rotation-race.test.mjs:35:1\n✖ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.112042ms)\n  TypeError [Error]: auth.isFamilyRevoked is not a function\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-kJLzWG/noop-3/workspace/test/rotation-race.test.mjs:43:21)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)",
+              "patch_preview": ""
+            }
+          ]
+        },
+        {
+          "agent": "oracle",
+          "passed": 3,
+          "trials": 3,
+          "pass_rate": 1,
+          "avg_solve_ms": 9,
+          "avg_insertions": 46,
+          "avg_deletions": 8,
+          "trials_detail": [
+            {
+              "trial": 1,
+              "passed": true,
+              "solve_duration_ms": 9,
+              "grade_duration_ms": 138,
+              "files_changed": 1,
+              "insertions": 46,
+              "deletions": 8,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.451958ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.463375ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.108167ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.103541ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 38.527458",
+              "patch_preview": "diff --git a/src/sessions.mjs b/src/sessions.mjs\nindex 1714c12..90699ff 100644\n--- a/src/sessions.mjs\n+++ b/src/sessions.mjs\n@@ -2,6 +2,7 @@ import crypto from \"node:crypto\";\n \n export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n   const tokens = new Map();\n+  const revokedFamilies = new Set();\n \n   function issue(userId, now = Date.now()) {\n     const familyId = crypto.randomUUID();\n@@ -10,7 +11,8 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n       token,\n       userId,\n       familyId,\n-      used: false,\n+      rotatedAt: null,\n+      replacedBy: null,\n       createdAt: now,\n     });\n     return { token, familyId, userId };\n@@ -21,25 +23,61 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n     if (!record) {\n       throw new Error(\"Invalid refresh token\");\n     }\n-    if (record.used) {\n-      throw new Error(\"Refresh token already used\");\n+    if (revokedFamilies.has(record.familyId)) {\n+      throw new Error(\"Session family has been revoked\");\n     }\n-    record.used = true;\n+\n+    if (record.rotatedAt !== null && record.replacedBy) {\n+      const child = tokens.get(record.replacedBy);\n+      const elapsed = now - record.rotatedAt;\n+      const withinGrace = elapsed >= 0 && elapsed <= graceWindowMs;\n+      const childIsStillHead = Boolean(child && child.rotatedAt === null);\n+\n+      if (withinGrace && childIsStillHead) {\n+        return {\n+          token: child.token,\n+          familyId: record.familyId,\n+          userId: record.userId,\n+          replayedWithinGrace: true,\n+        };\n+      }\n+\n+      // Replay outside grace window or stale ancestor -> token theft detected: revoke entire family\n+      revokedFamilies.add(record.familyId);\n+      throw new Error(\"Refresh token reuse detected; session family revoked\");\n+    }\n+\n     const nextToken = crypto.randomUUID();\n+    record.rotatedAt = now;\n+    record.replacedBy = nextToken;\n+\n     tokens.set(nextToken, {\n       token: nextToken,\n       userId: record.userId,\n       familyId: record.familyId,\n-      used: false,\n+      rotatedAt: null,\n+      replacedBy: null,\n       createdAt: now,\n     });\n-    return { token: nextToken, familyId: record.familyId, userId: record.userId };\n+\n+    return {\n+      token: nextToken,\n+      familyId: record.familyId,\n+      userId: record.userId,\n+      replayedWithinGrace: false,\n+    };\n   }\n \n   function isActive(refreshToken) {\n     const record = tokens.get(refreshToken);\n-    return Boolean(record && !record.used);\n+    if (!record) return false;\n+    if (revokedFamilies.has(record.familyId)) return false;\n+    return record.rotatedAt === null;\n+  }\n+\n+  function isFamilyRevoked(familyId) {\n+    return revokedFamilies.has(familyId);\n   }\n \n-  return { issue, rotate, isActive, graceWindowMs };\n+  return { issue, rotate, isActive, isFamilyRevoked, graceWindowMs };\n }\n"
+            },
+            {
+              "trial": 2,
+              "passed": true,
+              "solve_duration_ms": 8,
+              "grade_duration_ms": 144,
+              "files_changed": 1,
+              "insertions": 46,
+              "deletions": 8,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.603791ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.470083ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.117041ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.106583ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 39.115125",
+              "patch_preview": "diff --git a/src/sessions.mjs b/src/sessions.mjs\nindex 1714c12..90699ff 100644\n--- a/src/sessions.mjs\n+++ b/src/sessions.mjs\n@@ -2,6 +2,7 @@ import crypto from \"node:crypto\";\n \n export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n   const tokens = new Map();\n+  const revokedFamilies = new Set();\n \n   function issue(userId, now = Date.now()) {\n     const familyId = crypto.randomUUID();\n@@ -10,7 +11,8 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n       token,\n       userId,\n       familyId,\n-      used: false,\n+      rotatedAt: null,\n+      replacedBy: null,\n       createdAt: now,\n     });\n     return { token, familyId, userId };\n@@ -21,25 +23,61 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n     if (!record) {\n       throw new Error(\"Invalid refresh token\");\n     }\n-    if (record.used) {\n-      throw new Error(\"Refresh token already used\");\n+    if (revokedFamilies.has(record.familyId)) {\n+      throw new Error(\"Session family has been revoked\");\n     }\n-    record.used = true;\n+\n+    if (record.rotatedAt !== null && record.replacedBy) {\n+      const child = tokens.get(record.replacedBy);\n+      const elapsed = now - record.rotatedAt;\n+      const withinGrace = elapsed >= 0 && elapsed <= graceWindowMs;\n+      const childIsStillHead = Boolean(child && child.rotatedAt === null);\n+\n+      if (withinGrace && childIsStillHead) {\n+        return {\n+          token: child.token,\n+          familyId: record.familyId,\n+          userId: record.userId,\n+          replayedWithinGrace: true,\n+        };\n+      }\n+\n+      // Replay outside grace window or stale ancestor -> token theft detected: revoke entire family\n+      revokedFamilies.add(record.familyId);\n+      throw new Error(\"Refresh token reuse detected; session family revoked\");\n+    }\n+\n     const nextToken = crypto.randomUUID();\n+    record.rotatedAt = now;\n+    record.replacedBy = nextToken;\n+\n     tokens.set(nextToken, {\n       token: nextToken,\n       userId: record.userId,\n       familyId: record.familyId,\n-      used: false,\n+      rotatedAt: null,\n+      replacedBy: null,\n       createdAt: now,\n     });\n-    return { token: nextToken, familyId: record.familyId, userId: record.userId };\n+\n+    return {\n+      token: nextToken,\n+      familyId: record.familyId,\n+      userId: record.userId,\n+      replayedWithinGrace: false,\n+    };\n   }\n \n   function isActive(refreshToken) {\n     const record = tokens.get(refreshToken);\n-    return Boolean(record && !record.used);\n+    if (!record) return false;\n+    if (revokedFamilies.has(record.familyId)) return false;\n+    return record.rotatedAt === null;\n+  }\n+\n+  function isFamilyRevoked(familyId) {\n+    return revokedFamilies.has(familyId);\n   }\n \n-  return { issue, rotate, isActive, graceWindowMs };\n+  return { issue, rotate, isActive, isFamilyRevoked, graceWindowMs };\n }\n"
+            },
+            {
+              "trial": 3,
+              "passed": true,
+              "solve_duration_ms": 9,
+              "grade_duration_ms": 141,
+              "files_changed": 1,
+              "insertions": 46,
+              "deletions": 8,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-auth-sessions@1.0.0 test\n> node --test\n\n✔ issues and rotates a valid refresh token (0.571208ms)\n✔ concurrent tabs rotating the same token within graceWindowMs get the same child token without revocation (0.558709ms)\n✔ reusing a rotated token after graceWindowMs revokes the entire token family including the active head (0.121458ms)\n✔ reusing an older ancestor (>1 hop behind head) revokes the family even within graceWindowMs (0.106541ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 40.068125",
+              "patch_preview": "diff --git a/src/sessions.mjs b/src/sessions.mjs\nindex 1714c12..90699ff 100644\n--- a/src/sessions.mjs\n+++ b/src/sessions.mjs\n@@ -2,6 +2,7 @@ import crypto from \"node:crypto\";\n \n export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n   const tokens = new Map();\n+  const revokedFamilies = new Set();\n \n   function issue(userId, now = Date.now()) {\n     const familyId = crypto.randomUUID();\n@@ -10,7 +11,8 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n       token,\n       userId,\n       familyId,\n-      used: false,\n+      rotatedAt: null,\n+      replacedBy: null,\n       createdAt: now,\n     });\n     return { token, familyId, userId };\n@@ -21,25 +23,61 @@ export function createSessionManager({ graceWindowMs = 5000 } = {}) {\n     if (!record) {\n       throw new Error(\"Invalid refresh token\");\n     }\n-    if (record.used) {\n-      throw new Error(\"Refresh token already used\");\n+    if (revokedFamilies.has(record.familyId)) {\n+      throw new Error(\"Session family has been revoked\");\n     }\n-    record.used = true;\n+\n+    if (record.rotatedAt !== null && record.replacedBy) {\n+      const child = tokens.get(record.replacedBy);\n+      const elapsed = now - record.rotatedAt;\n+      const withinGrace = elapsed >= 0 && elapsed <= graceWindowMs;\n+      const childIsStillHead = Boolean(child && child.rotatedAt === null);\n+\n+      if (withinGrace && childIsStillHead) {\n+        return {\n+          token: child.token,\n+          familyId: record.familyId,\n+          userId: record.userId,\n+          replayedWithinGrace: true,\n+        };\n+      }\n+\n+      // Replay outside grace window or stale ancestor -> token theft detected: revoke entire family\n+      revokedFamilies.add(record.familyId);\n+      throw new Error(\"Refresh token reuse detected; session family revoked\");\n+    }\n+\n     const nextToken = crypto.randomUUID();\n+    record.rotatedAt = now;\n+    record.replacedBy = nextToken;\n+\n     tokens.set(nextToken, {\n       token: nextToken,\n       userId: record.userId,\n       familyId: record.familyId,\n-      used: false,\n+      rotatedAt: null,\n+      replacedBy: null,\n       createdAt: now,\n     });\n-    return { token: nextToken, familyId: record.familyId, userId: record.userId };\n+\n+    return {\n+      token: nextToken,\n+      familyId: record.familyId,\n+      userId: record.userId,\n+      replayedWithinGrace: false,\n+    };\n   }\n \n   function isActive(refreshToken) {\n     const record = tokens.get(refreshToken);\n-    return Boolean(record && !record.used);\n+    if (!record) return false;\n+    if (revokedFamilies.has(record.familyId)) return false;\n+    return record.rotatedAt === null;\n+  }\n+\n+  function isFamilyRevoked(familyId) {\n+    return revokedFamilies.has(familyId);\n   }\n \n-  return { issue, rotate, isActive, graceWindowMs };\n+  return { issue, rotate, isActive, isFamilyRevoked, graceWindowMs };\n }\n"
+            }
+          ]
+        }
+      ]
     },
     {
       "spec_version": "0.1",
       "id": "rate-limiter-sliding-window",
+      "title": "fix: switch to sliding-window log with exact retryAfterMs and idle bucket eviction",
+      "visibility": "public",
+      "published_at": "2026-11-27T05:46:50.921Z",
       "stack": [
         "node",
         "javascript",
@@ -162,27 +250,6 @@
         "network_isolated": false,
         "gold_pass_rate": "3/3",
         "verified_at": "2026-11-26T21:55:06.922Z"
-      },
-      "benchmark": {
-        "benchmarked_at": "2026-11-26T21:11:13.626Z",
-        "grade_sandbox": "local",
-        "trials_per_agent": 3,
-        "results": [
-          {
-            "agent": "noop",
-            "passed": 0,
-            "trials": 3,
-            "pass_rate": 0,
-            "avg_solve_ms": 0
-          },
-          {
-            "agent": "oracle",
-            "passed": 3,
-            "trials": 3,
-            "pass_rate": 1,
-            "avg_solve_ms": 9
-          }
-        ]
       },
       "valuation": {
         "tier": "UNBENCHMARKED",
@@ -236,16 +303,119 @@
         ],
         "disclaimer": "Indicative market estimate based on RL-environment & SWE-eval benchmarks; not a guaranteed payout. Actual payouts depend on buyer match and server-side QA."
       },
-      "ownership": {
-        "author_attestation": true,
-        "license": "mit"
-      },
       "bundle_sha256": "65290d38b65986a1e4beca73d9c436850e34f5380b1a29c41b58a151062538ba",
-      "packed_at": "2026-11-27T05:19:33.161Z"
+      "license": "mit",
+      "prompt_markdown": "# Task: Fix Rate Limiter Boundary Bursts, Retry-After Precision & Memory Leak\n\n## Problem Statement\n\nOur API gateway's in-memory rate limiter uses fixed time buckets (`Math.floor(now / windowMs)`). This causes three production issues:\n1. Clients can send 2x the allowed limit across a window boundary (e.g., at `t=990ms` and `t=1010ms`).\n2. Blocked responses always return the full `windowMs` as `retryAfterMs` instead of the exact time until a slot opens.\n3. Old per-window bucket keys are never evicted, causing unbounded memory growth (`activeKeyCount()` grows forever).\n\n## Expected Behavior\n\nRefactor `createRateLimiter({ limit, windowMs })` to implement a true sliding-window log per key:\n\n1. **Exact sliding window:** A request at timestamp `now` is allowed if strictly fewer than `limit` previous accepted requests for `key` occurred in the half-open interval `(now - windowMs, now]` (timestamps `<= now - windowMs` are expired).\n2. **Exact `retryAfterMs`:** When blocked (`allowed: false, remaining: 0`), return `retryAfterMs = Math.max(1, oldestTimestampInWindow + windowMs - now)`. Do NOT record rejected requests into the window.\n3. **Stale key eviction:** On `check(key, now)`, prune expired timestamps across stored keys and delete any key whose active timestamps become empty so `activeKeyCount()` only reflects keys with live requests in the current window.\n4. **Backward clock jitter:** If a request arrives with `now` slightly earlier than a previously recorded timestamp for that key, maintain sorted order so `oldestTimestampInWindow` and `retryAfterMs` remain accurate and never negative.\n5. **Config validation:** Throw an Error if `limit` is not a positive integer or `windowMs <= 0`.\n\n## Constraints\n\n- Preserve `check(key, now)` and `activeKeyCount()` return shapes and baseline test behavior.\n- Zero external dependencies; strictly offline.\n",
+      "debrief_summary": "# Frontier Failure Debrief: rate-limiter-sliding-window\n\n## 1. Root Cause & Non-Obvious Trap\nFixed-window buckets allow 2x boundary bursts and leak memory indefinitely because each `key:windowId` creates a new Map entry that is never deleted.\n\n## 2. Naive Fixes That Fail\n- Only pruning the *current* `key` on `check(key, now)` still leaks memory forever for one-shot ephemeral tenant/IP keys.\n- Simply appending `now` with `.push(now)` breaks `oldest = timestamps[0]` under minor NTP/clock skew where `now` arrives slightly out of order.\n- Recording blocked requests into the sliding window causes a permanent lockout loop under continuous retries.\n\n## 3. Where AI Coding Agents Got Stuck\nAgents regularly forget to evict *other* idle keys (failing the bounded memory check) or get the boundary condition (`<` vs `<=` on `now - windowMs`) off by 1ms.\n",
+      "agents": [
+        {
+          "agent": "noop",
+          "passed": 0,
+          "trials": 3,
+          "pass_rate": 0,
+          "avg_solve_ms": 0,
+          "avg_insertions": 0,
+          "avg_deletions": 0,
+          "trials_detail": [
+            {
+              "trial": 1,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 143,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "ASSERTION_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.061458ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-5PmyJ9/noop-1/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }",
+              "patch_preview": ""
+            },
+            {
+              "trial": 2,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 140,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "ASSERTION_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.091291ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-5PmyJ9/noop-2/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }",
+              "patch_preview": ""
+            },
+            {
+              "trial": 3,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 141,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "ASSERTION_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "    code: 'ERR_ASSERTION',\n    actual: 51,\n    expected: 1,\n    operator: 'strictEqual'\n  }\n\ntest at test/sliding-window.test.mjs:37:1\n✖ handles minor backward clock skew without negative retryAfterMs (0.077083ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n  \n  true !== false\n  \n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-5PmyJ9/noop-3/workspace/test/sliding-window.test.mjs:43:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: true,\n    expected: false,\n    operator: 'strictEqual'\n  }",
+              "patch_preview": ""
+            }
+          ]
+        },
+        {
+          "agent": "oracle",
+          "passed": 3,
+          "trials": 3,
+          "pass_rate": 1,
+          "avg_solve_ms": 9,
+          "avg_insertions": 39,
+          "avg_deletions": 7,
+          "trials_detail": [
+            {
+              "trial": 1,
+              "passed": true,
+              "solve_duration_ms": 9,
+              "grade_duration_ms": 145,
+              "files_changed": 1,
+              "insertions": 39,
+              "deletions": 7,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.615667ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.335667ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.508709ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.052792ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 38.577458",
+              "patch_preview": "diff --git a/src/limiter.mjs b/src/limiter.mjs\nindex f92053c..bbfba58 100644\n--- a/src/limiter.mjs\n+++ b/src/limiter.mjs\n@@ -1,23 +1,55 @@\n export function createRateLimiter({ limit, windowMs }) {\n+  if (!Number.isInteger(limit) || limit <= 0) {\n+    throw new Error(\"limit must be a positive integer\");\n+  }\n+  if (typeof windowMs !== \"number\" || windowMs <= 0) {\n+    throw new Error(\"windowMs must be positive\");\n+  }\n+\n   const buckets = new Map();\n \n+  function pruneExpired(now) {\n+    const cutoff = now - windowMs;\n+    for (const [k, timestamps] of buckets.entries()) {\n+      let firstValid = 0;\n+      while (firstValid < timestamps.length && timestamps[firstValid] <= cutoff) {\n+        firstValid++;\n+      }\n+      if (firstValid === timestamps.length) {\n+        buckets.delete(k);\n+      } else if (firstValid > 0) {\n+        timestamps.splice(0, firstValid);\n+      }\n+    }\n+  }\n+\n   function check(key, now = Date.now()) {\n-    const windowId = Math.floor(now / windowMs);\n-    const bucketKey = `${key}:${windowId}`;\n-    const count = buckets.get(bucketKey) ?? 0;\n+    pruneExpired(now);\n \n-    if (count >= limit) {\n+    const timestamps = buckets.get(key) ?? [];\n+    if (timestamps.length >= limit) {\n+      const oldest = timestamps[0];\n+      const retryAfterMs = Math.max(1, oldest + windowMs - now);\n       return {\n         allowed: false,\n         remaining: 0,\n-        retryAfterMs: windowMs,\n+        retryAfterMs,\n       };\n     }\n \n-    buckets.set(bucketKey, count + 1);\n+    // Keep timestamps sorted even if minor clock jitter produces an out-of-order timestamp\n+    if (timestamps.length === 0 || now >= timestamps[timestamps.length - 1]) {\n+      timestamps.push(now);\n+    } else {\n+      let idx = timestamps.length - 1;\n+      while (idx > 0 && timestamps[idx - 1] > now) idx--;\n+      timestamps.splice(idx, 0, now);\n+    }\n+\n+    buckets.set(key, timestamps);\n     return {\n       allowed: true,\n-      remaining: limit - (count + 1),\n+      remaining: limit - timestamps.length,\n       retryAfterMs: 0,\n     };\n   }\n"
+            },
+            {
+              "trial": 2,
+              "passed": true,
+              "solve_duration_ms": 9,
+              "grade_duration_ms": 142,
+              "files_changed": 1,
+              "insertions": 39,
+              "deletions": 7,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.688458ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.374833ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.555ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.055625ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.99925",
+              "patch_preview": "diff --git a/src/limiter.mjs b/src/limiter.mjs\nindex f92053c..bbfba58 100644\n--- a/src/limiter.mjs\n+++ b/src/limiter.mjs\n@@ -1,23 +1,55 @@\n export function createRateLimiter({ limit, windowMs }) {\n+  if (!Number.isInteger(limit) || limit <= 0) {\n+    throw new Error(\"limit must be a positive integer\");\n+  }\n+  if (typeof windowMs !== \"number\" || windowMs <= 0) {\n+    throw new Error(\"windowMs must be positive\");\n+  }\n+\n   const buckets = new Map();\n \n+  function pruneExpired(now) {\n+    const cutoff = now - windowMs;\n+    for (const [k, timestamps] of buckets.entries()) {\n+      let firstValid = 0;\n+      while (firstValid < timestamps.length && timestamps[firstValid] <= cutoff) {\n+        firstValid++;\n+      }\n+      if (firstValid === timestamps.length) {\n+        buckets.delete(k);\n+      } else if (firstValid > 0) {\n+        timestamps.splice(0, firstValid);\n+      }\n+    }\n+  }\n+\n   function check(key, now = Date.now()) {\n-    const windowId = Math.floor(now / windowMs);\n-    const bucketKey = `${key}:${windowId}`;\n-    const count = buckets.get(bucketKey) ?? 0;\n+    pruneExpired(now);\n \n-    if (count >= limit) {\n+    const timestamps = buckets.get(key) ?? [];\n+    if (timestamps.length >= limit) {\n+      const oldest = timestamps[0];\n+      const retryAfterMs = Math.max(1, oldest + windowMs - now);\n       return {\n         allowed: false,\n         remaining: 0,\n-        retryAfterMs: windowMs,\n+        retryAfterMs,\n       };\n     }\n \n-    buckets.set(bucketKey, count + 1);\n+    // Keep timestamps sorted even if minor clock jitter produces an out-of-order timestamp\n+    if (timestamps.length === 0 || now >= timestamps[timestamps.length - 1]) {\n+      timestamps.push(now);\n+    } else {\n+      let idx = timestamps.length - 1;\n+      while (idx > 0 && timestamps[idx - 1] > now) idx--;\n+      timestamps.splice(idx, 0, now);\n+    }\n+\n+    buckets.set(key, timestamps);\n     return {\n       allowed: true,\n-      remaining: limit - (count + 1),\n+      remaining: limit - timestamps.length,\n       retryAfterMs: 0,\n     };\n   }\n"
+            },
+            {
+              "trial": 3,
+              "passed": true,
+              "solve_duration_ms": 9,
+              "grade_duration_ms": 139,
+              "files_changed": 1,
+              "insertions": 39,
+              "deletions": 7,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-api-rate-limiter@1.0.0 test\n> node --test\n\n✔ allows requests up to limit within a single window (0.588666ms)\n✔ prevents fixed-window boundary 2x burst spikes and returns exact retryAfterMs (0.317625ms)\n✔ evicts stale idle tenant keys so activeKeyCount stays bounded (0.519042ms)\n✔ handles minor backward clock skew without negative retryAfterMs (0.092833ms)\nℹ tests 4\nℹ suites 0\nℹ pass 4\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.737417",
+              "patch_preview": "diff --git a/src/limiter.mjs b/src/limiter.mjs\nindex f92053c..bbfba58 100644\n--- a/src/limiter.mjs\n+++ b/src/limiter.mjs\n@@ -1,23 +1,55 @@\n export function createRateLimiter({ limit, windowMs }) {\n+  if (!Number.isInteger(limit) || limit <= 0) {\n+    throw new Error(\"limit must be a positive integer\");\n+  }\n+  if (typeof windowMs !== \"number\" || windowMs <= 0) {\n+    throw new Error(\"windowMs must be positive\");\n+  }\n+\n   const buckets = new Map();\n \n+  function pruneExpired(now) {\n+    const cutoff = now - windowMs;\n+    for (const [k, timestamps] of buckets.entries()) {\n+      let firstValid = 0;\n+      while (firstValid < timestamps.length && timestamps[firstValid] <= cutoff) {\n+        firstValid++;\n+      }\n+      if (firstValid === timestamps.length) {\n+        buckets.delete(k);\n+      } else if (firstValid > 0) {\n+        timestamps.splice(0, firstValid);\n+      }\n+    }\n+  }\n+\n   function check(key, now = Date.now()) {\n-    const windowId = Math.floor(now / windowMs);\n-    const bucketKey = `${key}:${windowId}`;\n-    const count = buckets.get(bucketKey) ?? 0;\n+    pruneExpired(now);\n \n-    if (count >= limit) {\n+    const timestamps = buckets.get(key) ?? [];\n+    if (timestamps.length >= limit) {\n+      const oldest = timestamps[0];\n+      const retryAfterMs = Math.max(1, oldest + windowMs - now);\n       return {\n         allowed: false,\n         remaining: 0,\n-        retryAfterMs: windowMs,\n+        retryAfterMs,\n       };\n     }\n \n-    buckets.set(bucketKey, count + 1);\n+    // Keep timestamps sorted even if minor clock jitter produces an out-of-order timestamp\n+    if (timestamps.length === 0 || now >= timestamps[timestamps.length - 1]) {\n+      timestamps.push(now);\n+    } else {\n+      let idx = timestamps.length - 1;\n+      while (idx > 0 && timestamps[idx - 1] > now) idx--;\n+      timestamps.splice(idx, 0, now);\n+    }\n+\n+    buckets.set(key, timestamps);\n     return {\n       allowed: true,\n-      remaining: limit - (count + 1),\n+      remaining: limit - timestamps.length,\n       retryAfterMs: 0,\n     };\n   }\n"
+            }
+          ]
+        }
+      ]
     },
     {
       "spec_version": "0.1",
       "id": "stripe-webhook-idempotency",
+      "title": "fix: enforce webhook idempotency and capped refund reconciliation",
+      "visibility": "public",
+      "published_at": "2026-11-27T05:46:50.923Z",
       "stack": [
         "node",
         "javascript",
@@ -264,27 +434,6 @@
         "network_isolated": false,
         "gold_pass_rate": "3/3",
         "verified_at": "2026-11-26T21:55:07.729Z"
-      },
-      "benchmark": {
-        "benchmarked_at": "2026-11-26T21:11:08.065Z",
-        "grade_sandbox": "local",
-        "trials_per_agent": 3,
-        "results": [
-          {
-            "agent": "noop",
-            "passed": 0,
-            "trials": 3,
-            "pass_rate": 0,
-            "avg_solve_ms": 0
-          },
-          {
-            "agent": "oracle",
-            "passed": 3,
-            "trials": 3,
-            "pass_rate": 1,
-            "avg_solve_ms": 8
-          }
-        ]
       },
       "valuation": {
         "tier": "UNBENCHMARKED",
@@ -338,12 +487,112 @@
         ],
         "disclaimer": "Indicative market estimate based on RL-environment & SWE-eval benchmarks; not a guaranteed payout. Actual payouts depend on buyer match and server-side QA."
       },
-      "ownership": {
-        "author_attestation": true,
-        "license": "mit"
-      },
       "bundle_sha256": "87ebf22f4b4b3d2099305493fde578ad267cd11745008cef03907bec36f886d5",
-      "packed_at": "2026-11-27T05:19:33.241Z"
+      "license": "mit",
+      "prompt_markdown": "# Task: Enforce Idempotent Billing Webhooks & Refund Reconciliation\n\n## Problem Statement\n\nOur billing webhook processor currently applies every incoming `invoice.paid` and `charge.refunded` event unconditionally. When payment webhooks are retried or partial refunds exceed the original charge amount, customer credit balances drift and over-debit.\n\n## Expected Behavior\n\nUpdate `processBillingWebhook(ledger, event)` and `createLedger()` to enforce the following guarantees:\n\n1. **Per-ledger idempotency:** Each `ledger` instance must independently track processed event IDs (do not use module-level global state shared across ledgers). Re-delivering an already processed `invoice.paid` or `charge.refunded` event `id` must not modify balances and must return `{ applied: false, duplicate: true, balance }` with the customer's current balance.\n2. **Charge-level refund caps:** Both `invoice.paid` and `charge.refunded` events require a non-empty `chargeId`. Track total paid and refunded amounts per `chargeId`. A `charge.refunded` event for an unknown `chargeId` or whose cumulative refunded amount would exceed the paid amount for that `chargeId` must throw an Error and must not modify balances or mark the event as processed.\n3. **Payload validation:** For `invoice.paid` and `charge.refunded`, missing/empty `id`, missing/empty `customerId`, missing/empty `chargeId`, or non-numeric / `<= 0` `amountCents` must throw an Error.\n4. **Unrelated events:** Events whose `type` is neither `invoice.paid` nor `charge.refunded` must still be ignored and return `{ applied: false, duplicate: false }`.\n\n## Constraints\n\n- Keep existing passing tests green.\n- Everything runs strictly offline with zero external network calls.\n",
+      "debrief_summary": "# Frontier Failure Debrief: stripe-webhook-idempotency\n\n## 1. Root Cause & Non-Obvious Trap\nWebhook retries and multiple partial refunds against the same charge need per-ledger state for both processed event IDs and per-charge paid/refunded totals.\n\n## 2. Naive Fixes That Fail\n- Putting a `Set` at module scope breaks isolation between separate ledger instances in tests and multi-tenant workers.\n- Marking an event ID as processed *before* validating refund limits silently swallows a rejected event if it is later corrected/retried.\n\n## 3. Where AI Coding Agents Got Stuck\nAgents frequently check `balance >= amountCents` globally per customer instead of enforcing refund caps per `chargeId`, which allows over-refunding one charge by draining credits from a different invoice.\n",
+      "agents": [
+        {
+          "agent": "noop",
+          "passed": 0,
+          "trials": 3,
+          "pass_rate": 0,
+          "avg_solve_ms": 0,
+          "avg_insertions": 0,
+          "avg_deletions": 0,
+          "trials_detail": [
+            {
+              "trial": 1,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 147,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "ASSERTION_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { applied: true, duplicate: false, balance: 10000 },\n    expected: { applied: false, duplicate: true, balance: 5000 },\n    operator: 'deepStrictEqual'\n  }\n\ntest at test/idempotency.test.mjs:55:1\n✖ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.128041ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-4G3qAN/noop-1/workspace/test/idempotency.test.mjs:75:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws'\n  }",
+              "patch_preview": ""
+            },
+            {
+              "trial": 2,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 146,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "ASSERTION_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { applied: true, duplicate: false, balance: 10000 },\n    expected: { applied: false, duplicate: true, balance: 5000 },\n    operator: 'deepStrictEqual'\n  }\n\ntest at test/idempotency.test.mjs:55:1\n✖ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.126708ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-4G3qAN/noop-2/workspace/test/idempotency.test.mjs:75:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws'\n  }",
+              "patch_preview": ""
+            },
+            {
+              "trial": 3,
+              "passed": false,
+              "solve_duration_ms": 0,
+              "grade_duration_ms": 145,
+              "files_changed": 0,
+              "insertions": 0,
+              "deletions": 0,
+              "failure_class": "ASSERTION_ERROR",
+              "solve_output_tail": "(noop baseline: no edits applied)",
+              "grade_output_tail": "      at Test.start (node:internal/test_runner/test:944:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: { applied: true, duplicate: false, balance: 10000 },\n    expected: { applied: false, duplicate: true, balance: 5000 },\n    operator: 'deepStrictEqual'\n  }\n\ntest at test/idempotency.test.mjs:55:1\n✖ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.115833ms)\n  AssertionError [ERR_ASSERTION]: Missing expected exception.\n      at TestContext.<anonymous> (file:///private/var/folders/0p/h13jrvbx6xbc0h4p0p7rj6200000gn/T/evalkit-bench-4G3qAN/noop-3/workspace/test/idempotency.test.mjs:75:10)\n      at Test.runInAsyncScope (node:async_hooks:214:14)\n      at Test.run (node:internal/test_runner/test:1047:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:744:18)\n      at Test.postRun (node:internal/test_runner/test:1173:19)\n      at Test.run (node:internal/test_runner/test:1101:12)\n      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:297:3) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: undefined,\n    operator: 'throws'\n  }",
+              "patch_preview": ""
+            }
+          ]
+        },
+        {
+          "agent": "oracle",
+          "passed": 3,
+          "trials": 3,
+          "pass_rate": 1,
+          "avg_solve_ms": 9,
+          "avg_insertions": 48,
+          "avg_deletions": 6,
+          "trials_detail": [
+            {
+              "trial": 1,
+              "passed": true,
+              "solve_duration_ms": 10,
+              "grade_duration_ms": 143,
+              "files_changed": 2,
+              "insertions": 48,
+              "deletions": 6,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.30275ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.668875ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.141666ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 38.022917",
+              "patch_preview": "diff --git a/src/ledger.mjs b/src/ledger.mjs\nindex 88fd2b5..1ad0b8d 100644\n--- a/src/ledger.mjs\n+++ b/src/ledger.mjs\n@@ -1,5 +1,7 @@\n export function createLedger() {\n   return {\n     balances: new Map(),\n+    processedEvents: new Set(),\n+    charges: new Map(),\n   };\n }\ndiff --git a/src/webhooks.mjs b/src/webhooks.mjs\nindex 04b356f..5b70b20 100644\n--- a/src/webhooks.mjs\n+++ b/src/webhooks.mjs\n@@ -1,15 +1,55 @@\n+function ensureLedgerState(ledger) {\n+  if (!ledger.processedEvents) ledger.processedEvents = new Set();\n+  if (!ledger.charges) ledger.charges = new Map();\n+}\n+\n export function processBillingWebhook(ledger, event) {\n+  ensureLedgerState(ledger);\n+\n+  if (event.type !== \"invoice.paid\" && event.type !== \"charge.refunded\") {\n+    return { applied: false, duplicate: false };\n+  }\n+\n+  if (!event.id || !event.customerId || typeof event.amountCents !== \"number\" || event.amountCents <= 0) {\n+    throw new Error(\"Invalid billing webhook payload\");\n+  }\n+\n+  if (ledger.processedEvents.has(event.id)) {\n+    return {\n+      applied: false,\n+      duplicate: true,\n+      balance: ledger.balances.get(event.customerId) ?? 0,\n+    };\n+  }\n+\n   if (event.type === \"invoice.paid\") {\n+    if (!event.chargeId) {\n+      throw new Error(\"invoice.paid event requires chargeId\");\n+    }\n+    ledger.processedEvents.add(event.id);\n+    const prevCharge = ledger.charges.get(event.chargeId) ?? { paid: 0, refunded: 0 };\n+    prevCharge.paid += event.amountCents;\n+    ledger.charges.set(event.chargeId, prevCharge);\n+\n     const cur = ledger.balances.get(event.customerId) ?? 0;\n     const next = cur + event.amountCents;\n     ledger.balances.set(event.customerId, next);\n     return { applied: true, duplicate: false, balance: next };\n   }\n-  if (event.type === \"charge.refunded\") {\n-    const cur = ledger.balances.get(event.customerId) ?? 0;\n-    const next = cur - event.amountCents;\n-    ledger.balances.set(event.customerId, next);\n-    return { applied: true, duplicate: false, balance: next };\n+\n+  // charge.refunded\n+  if (!event.chargeId) {\n+    throw new Error(\"charge.refunded event requires chargeId\");\n+  }\n+  const charge = ledger.charges.get(event.chargeId);\n+  if (!charge || charge.refunded + event.amountCents > charge.paid) {\n+    throw new Error(\"Refund exceeds paid amount for charge\");\n   }\n-  return { applied: false, duplicate: false };\n+\n+  ledger.processedEvents.add(event.id);\n+  charge.refunded += event.amountCents;\n+  const cur = ledger.balances.get(event.customerId) ?? 0;\n+  const next = cur - event.amountCents;\n+  ledger.balances.set(event.customerId, next);\n+  return { applied: true, duplicate: false, balance: next };\n }\n"
+            },
+            {
+              "trial": 2,
+              "passed": true,
+              "solve_duration_ms": 8,
+              "grade_duration_ms": 137,
+              "files_changed": 2,
+              "insertions": 48,
+              "deletions": 6,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.294541ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.638916ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.14475ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.727",
+              "patch_preview": "diff --git a/src/ledger.mjs b/src/ledger.mjs\nindex 88fd2b5..1ad0b8d 100644\n--- a/src/ledger.mjs\n+++ b/src/ledger.mjs\n@@ -1,5 +1,7 @@\n export function createLedger() {\n   return {\n     balances: new Map(),\n+    processedEvents: new Set(),\n+    charges: new Map(),\n   };\n }\ndiff --git a/src/webhooks.mjs b/src/webhooks.mjs\nindex 04b356f..5b70b20 100644\n--- a/src/webhooks.mjs\n+++ b/src/webhooks.mjs\n@@ -1,15 +1,55 @@\n+function ensureLedgerState(ledger) {\n+  if (!ledger.processedEvents) ledger.processedEvents = new Set();\n+  if (!ledger.charges) ledger.charges = new Map();\n+}\n+\n export function processBillingWebhook(ledger, event) {\n+  ensureLedgerState(ledger);\n+\n+  if (event.type !== \"invoice.paid\" && event.type !== \"charge.refunded\") {\n+    return { applied: false, duplicate: false };\n+  }\n+\n+  if (!event.id || !event.customerId || typeof event.amountCents !== \"number\" || event.amountCents <= 0) {\n+    throw new Error(\"Invalid billing webhook payload\");\n+  }\n+\n+  if (ledger.processedEvents.has(event.id)) {\n+    return {\n+      applied: false,\n+      duplicate: true,\n+      balance: ledger.balances.get(event.customerId) ?? 0,\n+    };\n+  }\n+\n   if (event.type === \"invoice.paid\") {\n+    if (!event.chargeId) {\n+      throw new Error(\"invoice.paid event requires chargeId\");\n+    }\n+    ledger.processedEvents.add(event.id);\n+    const prevCharge = ledger.charges.get(event.chargeId) ?? { paid: 0, refunded: 0 };\n+    prevCharge.paid += event.amountCents;\n+    ledger.charges.set(event.chargeId, prevCharge);\n+\n     const cur = ledger.balances.get(event.customerId) ?? 0;\n     const next = cur + event.amountCents;\n     ledger.balances.set(event.customerId, next);\n     return { applied: true, duplicate: false, balance: next };\n   }\n-  if (event.type === \"charge.refunded\") {\n-    const cur = ledger.balances.get(event.customerId) ?? 0;\n-    const next = cur - event.amountCents;\n-    ledger.balances.set(event.customerId, next);\n-    return { applied: true, duplicate: false, balance: next };\n+\n+  // charge.refunded\n+  if (!event.chargeId) {\n+    throw new Error(\"charge.refunded event requires chargeId\");\n+  }\n+  const charge = ledger.charges.get(event.chargeId);\n+  if (!charge || charge.refunded + event.amountCents > charge.paid) {\n+    throw new Error(\"Refund exceeds paid amount for charge\");\n   }\n-  return { applied: false, duplicate: false };\n+\n+  ledger.processedEvents.add(event.id);\n+  charge.refunded += event.amountCents;\n+  const cur = ledger.balances.get(event.customerId) ?? 0;\n+  const next = cur - event.amountCents;\n+  ledger.balances.set(event.customerId, next);\n+  return { applied: true, duplicate: false, balance: next };\n }\n"
+            },
+            {
+              "trial": 3,
+              "passed": true,
+              "solve_duration_ms": 9,
+              "grade_duration_ms": 139,
+              "files_changed": 2,
+              "insertions": 48,
+              "deletions": 6,
+              "failure_class": "PASS",
+              "solve_output_tail": "(oracle baseline: applied verified gold.patch)",
+              "grade_output_tail": "> indie-billing-webhooks@1.0.0 test\n> node --test\n\n✔ ignores unrelated webhook event types (0.3465ms)\n✔ duplicate invoice.paid and charge.refunded deliveries are idempotent per ledger (0.87ms)\n✔ rejects over-refunds, unknown charges, and invalid payloads without poisoning dedupe state (0.215625ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 37.717625",
+              "patch_preview": "diff --git a/src/ledger.mjs b/src/ledger.mjs\nindex 88fd2b5..1ad0b8d 100644\n--- a/src/ledger.mjs\n+++ b/src/ledger.mjs\n@@ -1,5 +1,7 @@\n export function createLedger() {\n   return {\n     balances: new Map(),\n+    processedEvents: new Set(),\n+    charges: new Map(),\n   };\n }\ndiff --git a/src/webhooks.mjs b/src/webhooks.mjs\nindex 04b356f..5b70b20 100644\n--- a/src/webhooks.mjs\n+++ b/src/webhooks.mjs\n@@ -1,15 +1,55 @@\n+function ensureLedgerState(ledger) {\n+  if (!ledger.processedEvents) ledger.processedEvents = new Set();\n+  if (!ledger.charges) ledger.charges = new Map();\n+}\n+\n export function processBillingWebhook(ledger, event) {\n+  ensureLedgerState(ledger);\n+\n+  if (event.type !== \"invoice.paid\" && event.type !== \"charge.refunded\") {\n+    return { applied: false, duplicate: false };\n+  }\n+\n+  if (!event.id || !event.customerId || typeof event.amountCents !== \"number\" || event.amountCents <= 0) {\n+    throw new Error(\"Invalid billing webhook payload\");\n+  }\n+\n+  if (ledger.processedEvents.has(event.id)) {\n+    return {\n+      applied: false,\n+      duplicate: true,\n+      balance: ledger.balances.get(event.customerId) ?? 0,\n+    };\n+  }\n+\n   if (event.type === \"invoice.paid\") {\n+    if (!event.chargeId) {\n+      throw new Error(\"invoice.paid event requires chargeId\");\n+    }\n+    ledger.processedEvents.add(event.id);\n+    const prevCharge = ledger.charges.get(event.chargeId) ?? { paid: 0, refunded: 0 };\n+    prevCharge.paid += event.amountCents;\n+    ledger.charges.set(event.chargeId, prevCharge);\n+\n     const cur = ledger.balances.get(event.customerId) ?? 0;\n     const next = cur + event.amountCents;\n     ledger.balances.set(event.customerId, next);\n     return { applied: true, duplicate: false, balance: next };\n   }\n-  if (event.type === \"charge.refunded\") {\n-    const cur = ledger.balances.get(event.customerId) ?? 0;\n-    const next = cur - event.amountCents;\n-    ledger.balances.set(event.customerId, next);\n-    return { applied: true, duplicate: false, balance: next };\n+\n+  // charge.refunded\n+  if (!event.chargeId) {\n+    throw new Error(\"charge.refunded event requires chargeId\");\n+  }\n+  const charge = ledger.charges.get(event.chargeId);\n+  if (!charge || charge.refunded + event.amountCents > charge.paid) {\n+    throw new Error(\"Refund exceeds paid amount for charge\");\n   }\n-  return { applied: false, duplicate: false };\n+\n+  ledger.processedEvents.add(event.id);\n+  charge.refunded += event.amountCents;\n+  const cur = ledger.balances.get(event.customerId) ?? 0;\n+  const next = cur - event.amountCents;\n+  ledger.balances.set(event.customerId, next);\n+  return { applied: true, duplicate: false, balance: next };\n }\n"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

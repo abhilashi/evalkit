@@ -90,15 +90,15 @@ evalkit pack ./evals/<slug> --attest-ip --license private-vault
 ```
 Show the user the generated `card.json` (the blind scorecard containing only stack, complexity, verification status, optional frontier benchmark pass rates, indicative valuation tier, and SHA-256 — safe to share publicly without leaking code or prompt) and the path to the `.evalkit.tar.gz` archive.
 
-### Step 10: Optional Private Vault Submission
-If the user wants to share their blind scorecard or submit to a vault endpoint:
+### Step 10: Optional Community Board / Private Vault Publishing
+If the user wants to share their trace on the live Community Board or submit to a vault endpoint:
 ```bash
-# Always preview first so the developer sees exact payload:
-evalkit submit ./evals/<slug> --dry-run
+# Preview redacted (for private-vault) or public (for OSS) trace payload first:
+evalkit publish ./evals/<slug> --dry-run
 
-# Submit blind card.json ONLY (never exposes source code):
-evalkit submit ./evals/<slug> --github-issue
+# Publish directly to the live Community Trace Board (safe redacted default for private-vault):
+evalkit publish ./evals/<slug> --board
 
-# Or submit to a configured Private Vault HTTPS endpoint:
+# Or submit directly to a configured Private Vault HTTPS endpoint:
 evalkit submit ./evals/<slug> --endpoint "$EVALKIT_VAULT_URL"
 ```

@@ -111,7 +111,60 @@ export interface BenchTrialResult {
   insertions: number;
   deletions: number;
   solve_timed_out: boolean;
+  failure_class?: string;
+  solve_output_tail?: string;
+  patch_preview?: string;
   output_tail: string;
+}
+
+export interface PublishedTraceEntry {
+  spec_version: string;
+  id: string;
+  title?: string;
+  visibility: "public" | "redacted";
+  published_at: string;
+  author?: string;
+  stack: string[];
+  category: TaskCategory;
+  complexity: {
+    files_changed: number;
+    insertions: number;
+    deletions: number;
+  };
+  verification: {
+    verified: boolean;
+    sandbox: SandboxMode | "unverified";
+    network_isolated: boolean;
+    gold_pass_rate: string;
+    verified_at: string | null;
+  };
+  valuation?: BundleValuation;
+  bundle_sha256: string;
+  license: string;
+  prompt_markdown?: string;
+  debrief_summary?: string;
+  agents: Array<{
+    agent: string;
+    passed: number;
+    trials: number;
+    pass_rate: number;
+    avg_solve_ms: number;
+    avg_insertions: number;
+    avg_deletions: number;
+    trials_detail: Array<{
+      trial: number;
+      passed: boolean;
+      solve_duration_ms: number;
+      grade_duration_ms: number;
+      files_changed: number;
+      insertions: number;
+      deletions: number;
+      failure_class: string;
+      solve_output_tail?: string;
+      grade_output_tail?: string;
+      patch_preview?: string;
+    }>;
+  }>;
 }
 
 export interface BenchAgentSummary {

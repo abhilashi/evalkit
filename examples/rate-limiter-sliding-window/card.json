@@ -21,7 +21,7 @@
     "verified_at": "2026-11-26T21:55:06.922Z"
   },
   "benchmark": {
-    "benchmarked_at": "2026-11-26T21:11:13.626Z",
+    "benchmarked_at": "2026-11-27T05:46:49.162Z",
     "grade_sandbox": "local",
     "trials_per_agent": 3,
     "results": [
@@ -98,5 +98,5 @@
     "license": "mit"
   },
   "bundle_sha256": "65290d38b65986a1e4beca73d9c436850e34f5380b1a29c41b58a151062538ba",
-  "packed_at": "2026-11-27T05:19:33.161Z"
+  "packed_at": "2026-11-27T05:46:49.226Z"
 }
