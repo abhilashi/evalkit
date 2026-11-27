@@ -4,6 +4,7 @@ import type { BlindCard } from "../types.js";
 import { auditBundle } from "./audit.js";
 import { computeBundleSha256 } from "../utils/git.js";
 import { execSyncSafe } from "../utils/exec.js";
+import { formatRangeUsd } from "../valuation/estimate.js";
 import { c, printFail, printHeader, printInfo, printPass, printWarn } from "../utils/format.js";
 
 export interface SubmitOptions {
@@ -37,6 +38,7 @@ function buildIssueBody(card: BlindCard): string {
 - **Stack:** ${card.stack.map((s) => `\`${s}\``).join(", ")}
 - **Diff Complexity:** ${card.complexity.files_changed} file(s), +${card.complexity.insertions} / -${card.complexity.deletions}
 - **Verification:** ${card.verification.verified ? `VERIFIED (${card.verification.gold_pass_rate}, ${card.verification.sandbox})` : "UNVERIFIED"}
+- **Signal / Est. Value:** ${card.valuation ? `Tier ${card.valuation.tier} (${card.valuation.score}/100) · ${formatRangeUsd(card.valuation)}` : "_Not estimated_"}
 - **IP Attestation:** ${card.ownership.author_attestation ? "Confirmed" : "Missing"} (\`${card.ownership.license}\`)
 - **Bundle SHA-256:** \`${card.bundle_sha256}\`
 

@@ -373,6 +373,15 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     assert.equal(naiveSummary.passed, 0);
     assert.ok(naiveSummary.avg_insertions >= 1);
 
+    // 5.5. ESTIMATE before packing — naive-bot failed 0/2 under local sandbox
+    const estRes = runCli(["estimate", bundleDir, "--json"]);
+    assert.equal(estRes.status, 0, `${estRes.stdout}\n${estRes.stderr}`);
+    const estJson = JSON.parse(estRes.stdout);
+    assert.equal(estJson.valuation.frontier_agents_tested, 1);
+    assert.equal(estJson.valuation.frontier_pass_rate, 0);
+    assert.equal(estJson.valuation.tier, "B");
+    assert.ok(estJson.valuation.indicative_range_usd.min >= 100);
+
     // 6. PACK without --attest-ip must be blocked
     const packNoAttest = runCli(["pack", bundleDir, "--json"]);
     assert.equal(packNoAttest.status, 1);
@@ -397,6 +406,9 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     assert.equal(packJson.card.ownership.author_attestation, true);
     assert.ok(packJson.card.benchmark);
     assert.equal(packJson.card.benchmark.results.length, 3);
+    assert.ok(packJson.card.valuation);
+    assert.equal(packJson.card.valuation.tier, "B");
+    assert.equal(packJson.card.valuation.frontier_agents_tested, 1);
     assert.equal(
       packJson.card.benchmark.results.find((r: { agent: string }) => r.agent === "oracle").passed,
       2

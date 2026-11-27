@@ -408,10 +408,14 @@ function renderHtml(data: LeaderboardData): string {
             <th>Diff Complexity</th>
             <th>Oracle Verification</th>
             <th>Agent Scores</th>
+            <th>Signal / Est. Value</th>
           </tr>
         </thead>
         <tbody id="taskBody"></tbody>
       </table>
+      <p class="muted" style="margin:14px 0 0;font-size:12px">
+        * Dollar ranges are indicative RL-environment / SWE-eval market estimates (not guaranteed payouts). Actual vault payouts depend on buyer match and server-side Docker QA.
+      </p>
     </section>
 
     <section class="panel" id="submit">
@@ -491,7 +495,7 @@ evalkit submit ./evals/my-bug --github-issue</div>
 
       taskCount.textContent = filtered.length + " task(s)";
       if (filtered.length === 0) {
-        taskBody.innerHTML = '<tr><td colspan="5" class="muted">No matching tasks.</td></tr>';
+        taskBody.innerHTML = '<tr><td colspan="6" class="muted">No matching tasks.</td></tr>';
         return;
       }
 
@@ -508,12 +512,25 @@ evalkit submit ./evals/my-bug --github-issue</div>
             }).join("")
           : '<span class="muted mono">not benchmarked</span>';
 
+        let valHtml = '<span class="muted mono">—</span>';
+        if (t.valuation) {
+          const v = t.valuation;
+          const tierCls = (v.tier === "S" || v.tier === "A") ? "ok" : (v.tier === "B" || v.tier === "C") ? "ok" : (v.tier === "UNBENCHMARKED" ? "warn" : "fail");
+          const tierLabel = (v.tier === "S" || v.tier === "A" || v.tier === "B" || v.tier === "C") ? ("TIER " + v.tier) : v.tier;
+          const rangeText = v.indicative_range_usd
+            ? (v.indicative_range_usd.max === 0 ? "$0" : "$" + v.indicative_range_usd.min.toLocaleString() + "–$" + v.indicative_range_usd.max.toLocaleString() + "*")
+            : "Run frontier bench";
+          valHtml = '<span class="badge ' + tierCls + '">' + tierLabel + ' · ' + v.score + '/100</span>' +
+            '<div class="muted mono" style="margin-top:4px;font-size:11px">' + rangeText + '</div>';
+        }
+
         return '<tr>' +
           '<td><div class="mono"><strong>' + t.id + '</strong></div><div class="muted mono" style="font-size:11px">' + t.category + ' · ' + (t.bundle_sha256 || '').slice(0, 10) + '</div></td>' +
           '<td>' + stacks + '</td>' +
           '<td class="mono">' + t.complexity.files_changed + ' files<div class="muted" style="font-size:11px">+' + t.complexity.insertions + ' / -' + t.complexity.deletions + '</div></td>' +
           '<td>' + vBadge + sandboxNote + '</td>' +
           '<td>' + scores + '</td>' +
+          '<td>' + valHtml + '</td>' +
           '</tr>';
       }).join("");
     }

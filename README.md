@@ -93,21 +93,39 @@ evalkit bench ./evals/webhook-race \
   --agents oracle,noop
 ```
 
-### 6. Pack into a vault-ready archive + Blind Scorecard (`card.json`)
-Enforces `audit` + fresh verification checksum + IP ownership attestation, automatically embeds matching benchmark scores into `card.json`, and outputs `<id>.evalkit.tar.gz`:
+### 6. Estimate Signal Score & indicative market value
+Compute a transparent `0–100` Signal Score, Tier (`S` / `A` / `B` / `C` / `UNBENCHMARKED` / `NOT_ELIGIBLE`), indicative RL-environment market range, and concrete upgrade hints:
+
+```bash
+evalkit estimate ./evals/webhook-race
+```
+
+| Tier | Indicative Range* | Requirements |
+| :--- | :--- | :--- |
+| **UNBENCHMARKED** | _Run frontier bench_ | Verified, but only `noop`/`oracle` baselines run so far |
+| **NOT ELIGIBLE** | **$0** | Unverified or frontier models pass ≥ 80% |
+| **Tier C** | **$50 – $150** | Verified, frontier pass rate 40–79% |
+| **Tier B** | **$150 – $450** | Score ≥ 50, frontier pass rate < 40% |
+| **Tier A** | **$450 – $1,200** | Score ≥ 70, Docker `--network=none` verified, frontier pass rate < 20% |
+| **Tier S** | **$1,200 – $3,000** | Score ≥ 85, Docker `--network=none`, `private-vault`, 0% pass across 2+ frontier models (or 3+ trials) |
+
+_\*Indicative market estimates based on current RL-environment & SWE-eval benchmarks — not guaranteed payouts. Actual vault payouts depend on buyer match and server-side QA._
+
+### 7. Pack into a vault-ready archive + Blind Scorecard (`card.json`)
+Enforces `audit` + fresh verification checksum + IP ownership attestation, automatically embeds matching benchmark scores and valuation into `card.json`, and outputs `<id>.evalkit.tar.gz`:
 
 ```bash
 evalkit pack ./evals/webhook-race --attest-ip --license private-vault
 ```
 
-### 7. Generate a static leaderboard (`docs/`)
+### 8. Generate a static leaderboard (`docs/`)
 Aggregates all `card.json` files in a directory into a standalone HTML + JSON leaderboard ready for GitHub Pages:
 
 ```bash
 evalkit leaderboard ./examples --out ./docs
 ```
 
-### 8. Submit to the Private Vault (blind card or full bundle)
+### 9. Submit to the Private Vault (blind card or full bundle)
 Preview what leaves your machine (`--dry-run`), submit a **blind `card.json` only** via GitHub Issues (`--github-issue`, zero source code exposed), or push to a Private Vault HTTPS endpoint (`--endpoint` / `EVALKIT_VAULT_URL`):
 
 ```bash
@@ -159,6 +177,7 @@ A minimal Cloudflare Worker + R2 intake endpoint ships in [`vault-worker/`](vaul
 - **v0.1 (Shipped):** Universal Agent Skill + CLI + Open Bundle Spec + secret/leak auditing + offline Docker/local verification + Blind Scorecard (`card.json`).
 - **v0.2 (Shipped):** `evalkit bench` multi-agent runner (`claude`, `codex`, `gemini`, `opencode`, `--cmd`), auto-embedded benchmark scores in `card.json`, GitHub Actions CI, and 1-command `npx` install.
 - **v0.3 (Shipped):** Verified showcase evals (`examples/`), `evalkit leaderboard` static GitHub Pages generator (`docs/`), `evalkit submit` (dry-run, `--github-issue` blind card, HTTPS vault API), and deployable Cloudflare Worker intake (`vault-worker/`).
+- **v0.4 (Shipped):** Transparent Signal Score (`0–100`), Tier (`S`/`A`/`B`/`C`), indicative market valuation estimator (`evalkit estimate`), embedded into `card.json` and the live leaderboard.
 
 ---
 

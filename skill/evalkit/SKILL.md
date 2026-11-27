@@ -81,12 +81,14 @@ evalkit bench ./evals/<slug> --agents noop,oracle --trials 1
 ```
 Bench results are saved to `private/bench-report.json` and automatically embedded into `card.json` when packing.
 
-### Step 9: Pack & Generate Blind Scorecard
+### Step 9: Estimate Value, Pack & Generate Blind Scorecard
+Run `evalkit estimate ./evals/<slug>` to review the transparent `0–100` Signal Score, Tier, indicative market range, and any upgrade hints (e.g., running Docker `--network=none` verification or benchmarking 2+ frontier models).
+
 Once `audit` and `verify` both pass, confirm with the user that they own the IP / have rights to license the code, then run:
 ```bash
 evalkit pack ./evals/<slug> --attest-ip --license private-vault
 ```
-Show the user the generated `card.json` (the blind scorecard containing only stack, complexity, verification status, optional frontier benchmark pass rates, and SHA-256 — safe to share publicly without leaking code or prompt) and the path to the `.evalkit.tar.gz` archive.
+Show the user the generated `card.json` (the blind scorecard containing only stack, complexity, verification status, optional frontier benchmark pass rates, indicative valuation tier, and SHA-256 — safe to share publicly without leaking code or prompt) and the path to the `.evalkit.tar.gz` archive.
 
 ### Step 10: Optional Private Vault Submission
 If the user wants to share their blind scorecard or submit to a vault endpoint:

@@ -1,6 +1,6 @@
 {
   "name": "evalkit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Turn real-world bugs and AI agent failure states in any git repo into reproducible, verified eval environments.",
   "type": "module",
   "license": "MIT",
@@ -30,7 +30,7 @@
   "scripts": {
     "build": "tsc && chmod +x dist/cli.js",
     "prepare": "npm run build",
-    "test": "npm run build && tsc -p tsconfig.test.json && node --test dist-test/e2e.test.js",
+    "test": "npm run build && tsc -p tsconfig.test.json && node --test dist-test/*.test.js",
     "clean": "rm -rf dist dist-test"
   },
   "keywords": [

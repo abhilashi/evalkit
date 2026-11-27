@@ -136,6 +136,27 @@ export interface BenchReport {
   agents: BenchAgentSummary[];
 }
 
+export type ValuationTier = "S" | "A" | "B" | "C" | "UNBENCHMARKED" | "NOT_ELIGIBLE";
+
+export interface ValuationBreakdownItem {
+  factor: string;
+  points: number;
+  max_points: number;
+  note: string;
+}
+
+export interface BundleValuation {
+  tier: ValuationTier;
+  score: number;
+  max_score: number;
+  indicative_range_usd: { min: number; max: number } | null;
+  frontier_agents_tested: number;
+  frontier_pass_rate: number | null;
+  breakdown: ValuationBreakdownItem[];
+  upgrade_hints: string[];
+  disclaimer: string;
+}
+
 export interface BlindCard {
   spec_version: string;
   id: string;
@@ -165,6 +186,7 @@ export interface BlindCard {
       avg_solve_ms: number;
     }>;
   };
+  valuation?: BundleValuation;
   ownership: {
     author_attestation: boolean;
     license: string;

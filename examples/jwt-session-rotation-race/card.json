@@ -18,7 +18,7 @@
     "sandbox": "local",
     "network_isolated": false,
     "gold_pass_rate": "3/3",
-    "verified_at": "2026-11-26T21:11:09.337Z"
+    "verified_at": "2026-11-26T21:55:06.135Z"
   },
   "benchmark": {
     "benchmarked_at": "2026-11-26T21:11:10.844Z",
@@ -41,10 +41,62 @@
       }
     ]
   },
+  "valuation": {
+    "tier": "UNBENCHMARKED",
+    "score": 42,
+    "max_score": 100,
+    "indicative_range_usd": null,
+    "frontier_agents_tested": 0,
+    "frontier_pass_rate": null,
+    "breakdown": [
+      {
+        "factor": "Offline Verification",
+        "points": 12,
+        "max_points": 25,
+        "note": "Local sandbox verified (3/3)"
+      },
+      {
+        "factor": "Frontier Difficulty",
+        "points": 0,
+        "max_points": 35,
+        "note": "No frontier agents benchmarked yet (only baselines)"
+      },
+      {
+        "factor": "Task Complexity",
+        "points": 10,
+        "max_points": 15,
+        "note": "Multi-file diff (2 files, 99 LOC)"
+      },
+      {
+        "factor": "Stack Demand",
+        "points": 10,
+        "max_points": 10,
+        "note": "High-demand stack tags: auth, security"
+      },
+      {
+        "factor": "Author Debrief",
+        "points": 10,
+        "max_points": 10,
+        "note": "Detailed root-cause & failure-mode debrief present"
+      },
+      {
+        "factor": "Vault Exclusivity",
+        "points": 0,
+        "max_points": 5,
+        "note": "Public OSS license (mit)"
+      }
+    ],
+    "upgrade_hints": [
+      "Run `evalkit verify` with Docker (`--network=none`) for +13 pts & Tier A/S eligibility",
+      "Run `evalkit bench --agents claude,codex,gemini --trials 3` locally to unlock an indicative USD valuation",
+      "Use `--license private-vault` for exclusive uncontaminated pricing (+5 pts)"
+    ],
+    "disclaimer": "Indicative market estimate based on RL-environment & SWE-eval benchmarks; not a guaranteed payout. Actual payouts depend on buyer match and server-side QA."
+  },
   "ownership": {
     "author_attestation": true,
     "license": "mit"
   },
   "bundle_sha256": "f91561c2e52ec67192432565ef2d8d7c09633fad9420656fc895db711c1a941b",
-  "packed_at": "2026-11-26T21:11:10.905Z"
+  "packed_at": "2026-11-27T05:19:33.079Z"
 }

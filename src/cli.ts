@@ -6,13 +6,14 @@ import { runInit } from "./commands/init.js";
 import { runAudit } from "./commands/audit.js";
 import { runVerify } from "./commands/verify.js";
 import { runBench } from "./commands/bench.js";
+import { runEstimate } from "./commands/estimate.js";
 import { runPack } from "./commands/pack.js";
 import { runLeaderboard } from "./commands/leaderboard.js";
 import { runSubmit } from "./commands/submit.js";
 import { runInstallSkill } from "./commands/install-skill.js";
 import { c, printFail } from "./utils/format.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 function printHelp(): void {
   console.log(`
@@ -28,6 +29,7 @@ ${c.bold("COMMANDS")}
   ${c.cyan("audit")}          Scan a bundle for secrets, PII, git-history leaks, and prompt leaks
   ${c.cyan("verify")}         Run deterministic base-fail + 3x gold-pass verification (Docker offline or local)
   ${c.cyan("bench")}          Benchmark coding agents (claude, codex, gemini, custom) on a bundle
+  ${c.cyan("estimate")}       Compute Signal Score (0–100), Tier, and indicative market value range
   ${c.cyan("pack")}           Validate, attest IP ownership, generate blind scorecard (card.json) + .tar.gz
   ${c.cyan("leaderboard")}    Generate a static HTML + JSON leaderboard from verified card.json bundles
   ${c.cyan("submit")}         Submit a blind scorecard (or full bundle) to the Private Vault or GitHub
@@ -243,6 +245,28 @@ async function main(): Promise<void> {
           verifyTimeoutSec: values["verify-timeout"]
             ? Number.parseInt(values["verify-timeout"], 10)
             : undefined,
+          json: values.json,
+        });
+        break;
+      }
+
+      case "estimate":
+      case "value": {
+        const { values, positionals } = parseArgs({
+          args: subArgs,
+          allowPositionals: true,
+          options: {
+            json: { type: "boolean", default: false },
+            help: { type: "boolean", short: "h", default: false },
+          },
+        });
+        if (values.help || !positionals[0]) {
+          console.log("Usage: evalkit estimate <bundle-dir> [--json]");
+          process.exitCode = values.help ? 0 : 1;
+          return;
+        }
+        exitCode = runEstimate({
+          bundleDir: positionals[0],
           json: values.json,
         });
         break;

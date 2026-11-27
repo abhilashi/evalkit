@@ -9,9 +9,15 @@ import type {
   BlindCard,
   EvalConfig,
   SandboxMode,
+  VerifyReport,
 } from "../types.js";
 import { execSyncSafe, isDockerAvailable, tailOutput } from "../utils/exec.js";
 import { computeBundleSha256, ensureSingleCommitGit } from "../utils/git.js";
+import {
+  checkHasDetailedDebrief,
+  estimateBundleValue,
+  formatRangeUsd,
+} from "../valuation/estimate.js";
 import { c, printFail, printHeader, printInfo, printPass, printWarn } from "../utils/format.js";
 
 export interface BenchOptions {
@@ -467,7 +473,26 @@ export function runBench(options: BenchOptions): number {
   const reportPath = path.join(bundleDir, "private", "bench-report.json");
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), "utf8");
 
-  // If card.json already exists and matches this bundle, refresh its benchmark block automatically
+  // Compute updated indicative valuation using latest verify + bench reports
+  let verifyReport: VerifyReport | null = null;
+  const verifyReportPath = path.join(bundleDir, "private", "verify-report.json");
+  if (fs.existsSync(verifyReportPath)) {
+    try {
+      verifyReport = JSON.parse(fs.readFileSync(verifyReportPath, "utf8")) as VerifyReport;
+    } catch {
+      verifyReport = null;
+    }
+  }
+  const valuation = estimateBundleValue({
+    config,
+    verifyReport,
+    verifyMatchesChecksum: Boolean(verifyReport && verifyReport.bundle_sha256 === bundleSha),
+    benchReport: report,
+    benchMatchesChecksum: true,
+    hasDetailedDebrief: checkHasDetailedDebrief(bundleDir),
+  });
+
+  // If card.json already exists and matches this bundle, refresh its benchmark + valuation blocks
   const cardPath = path.join(bundleDir, "card.json");
   if (fs.existsSync(cardPath)) {
     try {
@@ -485,6 +510,7 @@ export function runBench(options: BenchOptions): number {
             avg_solve_ms: a.avg_solve_ms,
           })),
         };
+        card.valuation = valuation;
         fs.writeFileSync(cardPath, JSON.stringify(card, null, 2), "utf8");
       }
     } catch {
@@ -493,11 +519,14 @@ export function runBench(options: BenchOptions): number {
   }
 
   if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
+    console.log(JSON.stringify({ ...report, valuation }, null, 2));
     return 0;
   }
 
   printScorecardTable(config, report);
+  printInfo(
+    `Signal Score: ${c.bold(`${valuation.score}/100`)} (${c.bold(valuation.tier)}) · ${formatRangeUsd(valuation)}`
+  );
   printInfo(`Full report saved to ${path.relative(process.cwd(), reportPath)}`);
   console.log("");
   return 0;
