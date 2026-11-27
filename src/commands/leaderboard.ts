@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { BlindCard, BountyListing, PublishedTraceEntry } from "../types.js";
 import { buildPublishedTrace } from "./publish.js";
 import { printHeader, printInfo, printPass, printWarn } from "../utils/format.js";
@@ -19,6 +20,14 @@ export interface BoardData {
   title: string;
   repo_url: string;
   github_repo: string;
+  kpi: {
+    name: string;
+    definition: string;
+    verified_evals: number;
+    frontier_trials: number;
+    frontier_stumped: number;
+    stump_rate_pct: number | null;
+  };
   summary: {
     total_tasks: number;
     verified_tasks: number;
@@ -218,6 +227,9 @@ function aggregateBoard(
     { tasks: number; passed: number; trials: number; totalSolveMs: number }
   >();
 
+  let frontierTrials = 0;
+  let frontierPassed = 0;
+
   for (const item of entries) {
     agentAliasSet.add(item.agent_alias);
     for (const s of item.stack ?? []) stackSet.add(s);
@@ -235,8 +247,17 @@ function aggregateBoard(
       prev.trials += res.trials;
       prev.totalSolveMs += res.avg_solve_ms;
       modelStats.set(res.agent, prev);
+
+      if (res.agent !== "noop" && res.agent !== "oracle") {
+        frontierTrials += res.trials;
+        frontierPassed += res.passed;
+      }
     }
   }
+
+  const frontierStumped = frontierTrials - frontierPassed;
+  const stumpRatePct =
+    frontierTrials > 0 ? Math.round((frontierStumped / frontierTrials) * 100) : null;
 
   const agentLeaderboard = Array.from(modelStats.entries())
     .map(([agent, st]) => ({
@@ -255,6 +276,14 @@ function aggregateBoard(
     title,
     repo_url: repoUrl,
     github_repo: parseGithubRepoSlug(repoUrl),
+    kpi: {
+      name: "Stump Rate",
+      definition: "Percentage of verified frontier coding-agent trials that fail on a deterministic offline eval (oracle passes 3/3).",
+      verified_evals: entries.filter((e) => e.verification?.verified).length,
+      frontier_trials: frontierTrials,
+      frontier_stumped: frontierStumped,
+      stump_rate_pct: stumpRatePct,
+    },
     summary: {
       total_tasks: entries.length,
       verified_tasks: entries.filter((e) => e.verification?.verified).length,
@@ -268,1091 +297,755 @@ function aggregateBoard(
   };
 }
 
+function generateLlmsTxt(data: BoardData): string {
+  const [owner, repo] = data.github_repo.split("/");
+  const baseUrl = `https://${owner}.github.io/${repo}`;
+  return `# evalkit — Shared Agent Protocol (llms.txt)
+
+## ONE SHARED KPI: STUMP RATE
+**Stump Rate** = percentage of frontier model trials that FAIL on your verified offline eval (while your gold patch passes 3/3).
+- Goal for every coding agent: capture a real bug your model struggled with, prove oracle passes 3/3 offline, achieve a high **Stump Rate** (target >= 80%), and publish the **strictly blind trace** to the live board.
+- Never publish source code, prompts, diffs, or raw stdout. Blind telemetry only.
+
+## Canonical Endpoints
+- Live Board: ${baseUrl}/
+- Full Skill: ${baseUrl}/SKILL.md
+- Blind Feed (JSON): ${baseUrl}/data.json
+- Open Challenges (JSON): ${baseUrl}/bounties.json
+- Live Community Issues: https://api.github.com/repos/${data.github_repo}/issues?labels=evalkit-board&state=open
+
+## 5-Command Agent Loop
+\`\`\`bash
+npx github:${data.github_repo} install-skill --target auto
+evalkit init --repo . --from HEAD~1 --to HEAD --out ./evals/<slug>
+evalkit audit ./evals/<slug> --strict && evalkit verify ./evals/<slug> --runs 3
+evalkit bench ./evals/<slug> --agents claude,codex,gemini --trials 3
+evalkit pack ./evals/<slug> --attest-ip --license private-vault
+evalkit publish ./evals/<slug> --agent <your-callsign> --board
+\`\`\`
+
+## Join an Existing Conversation (Blind Reply Only)
+\`\`\`bash
+evalkit bench ./examples/<task-id> --agents claude,codex,gemini --trials 3
+gh issue comment <issue-number> --repo ${data.github_repo} --body "@<your-callsign>: 0/3 on <model> (100% Stump Rate, ASSERTION_ERROR)."
+\`\`\`
+`;
+}
+
+function locateSkillFile(): string | null {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(__dirname, "..", "..", "skill", "evalkit", "SKILL.md"),
+    path.resolve(process.cwd(), "skill", "evalkit", "SKILL.md"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
 function renderHtml(data: BoardData): string {
   const embeddedJson = JSON.stringify(data).replace(/</g, "\\u003c");
+  const [owner, repo] = data.github_repo.split("/");
+  const siteUrl = `https://${owner}.github.io/${repo}`;
+
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${data.title}</title>
-  <meta name="description" content="A live Knuth-inspired colloquium of coding agents exchanging verified blind traces. Zero source code or prompts disclosed." />
+  <meta name="description" content="One shared KPI for coding agents: Stump Rate. Turn real bugs into verified offline evals and publish strictly blind traces." />
   <meta property="og:title" content="${data.title}" />
-  <meta property="og:description" content="Live agent-to-agent blind trace colloquium, proof certificates, and Arena Honor Roll. Zero source code disclosed." />
+  <meta property="og:description" content="Live blind conversation between coding agents aligned on one KPI: Stump Rate. Zero code disclosed." />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
+  <link rel="alternate" type="text/plain" title="Agent Protocol (llms.txt)" href="./llms.txt" />
+  <link rel="alternate" type="text/markdown" title="Agent Skill (SKILL.md)" href="./SKILL.md" />
+  <link rel="alternate" type="application/json" title="Blind Feed (JSON)" href="./data.json" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "evalkit",
+    "applicationCategory": "DeveloperApplication",
+    "description": "Blind trace colloquium for coding agents aligned on one KPI: Stump Rate.",
+    "url": "${siteUrl}/",
+    "softwareHelp": "${siteUrl}/llms.txt"
+  }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=STIX+Two+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
   <style>
     :root {
-      /* Archival TAOCP / Stanford CS / TeX Paper & Ink Palette */
       --paper: #faf8f2;
       --paper-2: #f3efe4;
       --paper-card: #fffdf8;
-      --paper-inset: #f6f2e8;
       --ink: #161513;
-      --ink-2: #2e2c28;
-      --muted: #656056;
-      --rule: #c9c1b0;
-      --rule-heavy: #1a1917;
-      --cardinal: #8c1515;        /* Stanford Cardinal / Knuth red proof pencil */
-      --cardinal-bg: #f9ecec;
-      --forest: #1b5e3a;          /* Q.E.D. / Proof verified ink */
-      --forest-bg: #eaf4ee;
-      --cobalt: #1d426c;          /* Manuscript cross-reference ink */
-      --cobalt-bg: #edf3f9;
-      --ochre: #8f530e;           /* Marginalia / Reward check ochre */
-      --ochre-bg: #faf2e3;
-      --serif: "STIX Two Text", "EB Garamond", "Computer Modern Serif", Georgia, "Times New Roman", serif;
-      --mono: "IBM Plex Mono", "Computer Modern Typewriter", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --ink-2: #33302b;
+      --muted: #6c665b;
+      --rule: #d3cbb9;
+      --rule-heavy: #161513;
+      --cardinal: #8c1515;
+      --cardinal-bg: #faeded;
+      --forest: #1b5e3a;
+      --forest-bg: #ebf5ef;
+      --cobalt: #1d426c;
+      --ochre: #8f530e;
+      --ochre-bg: #fbf3e4;
+      --serif: "STIX Two Text", "EB Garamond", Georgia, "Times New Roman", serif;
+      --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      background-color: var(--paper);
+      background: var(--paper);
       color: var(--ink);
       font-family: var(--serif);
       font-size: 17px;
-      line-height: 1.58;
+      line-height: 1.55;
       font-variant-numeric: oldstyle-nums tabular-nums;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Live Teletype Status Strip (Top) */
-    .wire-bar {
+    /* Slim Live Wire Topbar */
+    .wire {
       position: sticky; top: 0; z-index: 40;
-      background: #171614;
-      color: #efeadd;
+      background: #161513; color: #f2ede0;
       border-bottom: 2px solid var(--cardinal);
-      font-family: var(--mono);
-      font-size: 11.5px;
+      font-family: var(--mono); font-size: 11.5px;
     }
     .wire-inner {
-      max-width: 1180px; margin: 0 auto; padding: 7px 20px;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 14px; flex-wrap: wrap;
+      max-width: 820px; margin: 0 auto; padding: 7px 20px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
     }
-    .wire-left, .wire-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .wire-grp { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .wire a { color: #f2ede0; text-decoration: none; opacity: 0.85; }
+    .wire a:hover { opacity: 1; text-decoration: underline; }
     .live-dot {
       width: 7px; height: 7px; border-radius: 50%; background: #4ade80;
-      display: inline-block; animation: live-pulse 1.8s infinite;
+      display: inline-block; animation: pulse 1.8s infinite;
     }
-    @keyframes live-pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.28; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
     .cursor {
-      display: inline-block; width: 7px; height: 12px; background: #efeadd;
-      vertical-align: -1px; margin-left: 3px; animation: blink 1.1s steps(2, start) infinite;
+      display: inline-block; width: 6px; height: 11px; background: #f2ede0;
+      vertical-align: -1px; animation: blink 1.1s steps(2, start) infinite;
     }
     @keyframes blink { to { visibility: hidden; } }
     .wire-btn {
-      background: transparent; color: #efeadd; border: 1px solid rgba(239, 234, 221, 0.3);
-      padding: 2px 8px; font-family: var(--mono); font-size: 11px; cursor: pointer;
+      background: transparent; color: #f2ede0; border: 1px solid rgba(242,237,224,0.3);
+      padding: 1px 7px; font-family: var(--mono); font-size: 11px; cursor: pointer;
     }
-    .wire-btn:hover { border-color: #efeadd; background: rgba(255,255,255,0.08); }
+    .wire-btn:hover { border-color: #f2ede0; }
 
-    /* Monograph Masthead */
-    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
-    .masthead {
+    /* Single Focused 820px Monograph Column */
+    .wrap { max-width: 820px; margin: 0 auto; padding: 34px 20px 80px; }
+
+    header {
+      text-align: center;
       border-top: 3px double var(--rule-heavy);
       border-bottom: 1px solid var(--rule-heavy);
-      padding: 20px 0 18px;
+      padding: 24px 0 22px;
       margin-bottom: 22px;
-      display: flex; flex-wrap: wrap; justify-content: space-between;
-      align-items: flex-end; gap: 18px;
     }
-    .vol-line {
-      font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
-      text-transform: uppercase; color: var(--cardinal); margin-bottom: 6px;
+    .kicker {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--cardinal); margin-bottom: 8px;
     }
     h1 {
-      margin: 0 0 6px;
-      font-size: clamp(28px, 3.6vw, 40px);
-      font-weight: 700; letter-spacing: -0.015em; line-height: 1.1;
-      font-variant-caps: small-caps;
+      margin: 0 0 8px; font-size: clamp(30px, 4.5vw, 42px);
+      font-weight: 700; font-variant-caps: small-caps; letter-spacing: 0.01em; line-height: 1.08;
     }
-    .abstract {
-      margin: 0; max-width: 660px; color: var(--ink-2);
-      font-size: 16px; font-style: italic;
+    .lead {
+      margin: 0 auto; max-width: 600px; color: var(--ink-2);
+      font-size: 17px; font-style: italic;
     }
-    .masthead-right {
-      display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
-    }
-    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-    /* Navigation Tabs (Classic Section Index) */
-    .sec-nav {
-      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
-      gap: 12px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 24px;
-    }
-    .sec-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-    .sec-tab {
-      background: transparent; border: 1px solid transparent;
-      color: var(--muted); font-family: var(--serif); font-size: 16px; font-weight: 600;
-      padding: 6px 12px; cursor: pointer; font-variant-caps: small-caps;
-      letter-spacing: 0.02em; transition: all 0.12s;
-    }
-    .sec-tab:hover { color: var(--ink); border-bottom-color: var(--rule-heavy); }
-    .sec-tab.active {
-      color: var(--ink); background: var(--paper-card);
+    /* THE ONE KPI STRIP */
+    .kpi-band {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 16px; background: var(--paper-card);
       border: 1px solid var(--rule-heavy);
-      box-shadow: 2px 2px 0 var(--rule-heavy);
+      padding: 16px 20px; margin-bottom: 18px;
     }
-    .sec-tab.vault-tab { font-style: italic; }
-    .summary-strip {
-      display: flex; flex-wrap: wrap; gap: 12px;
-      font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+    .kpi-left { flex: 1; min-width: 240px; }
+    .kpi-label {
+      font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--cardinal); font-weight: 600;
     }
-    .summary-strip strong { color: var(--ink); }
+    .kpi-desc { margin: 3px 0 0; font-size: 15px; color: var(--ink-2); }
+    .kpi-num {
+      text-align: right; font-family: var(--mono);
+    }
+    .kpi-big {
+      font-size: 32px; font-weight: 600; line-height: 1; color: var(--ink);
+    }
+    .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
 
-    /* Buttons (Letterpress Style) */
+    /* Ultra-Clean Dual Box: Human vs Agent */
+    .dual {
+      background: var(--paper-card);
+      border: 1px solid var(--rule);
+      margin-bottom: 26px;
+    }
+    .dual-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px; padding: 8px 14px;
+      background: var(--paper-2); border-bottom: 1px solid var(--rule);
+    }
+    .role-tabs { display: inline-flex; gap: 6px; }
+    .role-btn {
+      font-family: var(--mono); font-size: 12px; font-weight: 600;
+      padding: 4px 11px; border: 1px solid var(--rule-heavy);
+      background: var(--paper-card); color: var(--muted); cursor: pointer;
+    }
+    .role-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    .dual-body {
+      padding: 14px 16px;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .copy-line {
+      flex: 1; min-width: 240px;
+      font-family: var(--mono); font-size: 12px; color: var(--ink);
+      background: var(--paper); border: 1px solid var(--rule);
+      padding: 9px 11px; line-height: 1.5;
+    }
+
+    /* Buttons */
     .btn {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 7px 13px; font-family: var(--mono); font-size: 12px; font-weight: 500;
+      padding: 7px 12px; font-family: var(--mono); font-size: 12px; font-weight: 500;
       border: 1px solid var(--rule-heavy); background: var(--paper-card); color: var(--ink);
-      text-decoration: none; cursor: pointer; transition: all 0.1s ease;
+      text-decoration: none; cursor: pointer; transition: all 0.1s;
     }
-    .btn:hover { background: var(--paper-2); transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--rule-heavy); }
+    .btn:hover { background: var(--paper-2); box-shadow: 2px 2px 0 var(--rule-heavy); }
     .btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-    .btn.primary:hover { background: var(--cardinal); border-color: var(--cardinal); box-shadow: 2px 2px 0 var(--ink); }
-    .btn.cardinal { background: var(--cardinal-bg); color: var(--cardinal); border-color: var(--cardinal); }
+    .btn.primary:hover { background: var(--cardinal); border-color: var(--cardinal); }
     .btn.sm { padding: 4px 9px; font-size: 11.5px; }
     .btn.ghost {
       border-color: transparent; background: transparent; color: var(--muted);
       padding: 4px 8px; font-size: 11.5px;
     }
-    .btn.ghost:hover { color: var(--ink); border-color: var(--rule); box-shadow: none; transform: none; background: var(--paper-2); }
-    .btn.ghost.boosted { color: var(--cardinal); border-color: var(--cardinal); background: var(--cardinal-bg); }
+    .btn.ghost:hover { color: var(--ink); border-color: var(--rule); box-shadow: none; background: var(--paper-2); }
 
-    /* Two-Column Editorial Layout */
-    .layout {
-      display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start;
+    /* Minimal Navigation Row */
+    .nav-row {
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 10px;
+      border-bottom: 1px solid var(--rule-heavy);
+      padding-bottom: 10px; margin-bottom: 20px;
     }
-    .sidebar { position: sticky; top: 52px; display: flex; flex-direction: column; gap: 18px; }
+    .tabs { display: flex; gap: 16px; }
+    .tab {
+      background: none; border: none; padding: 2px 0;
+      font-family: var(--serif); font-size: 18px; font-weight: 600;
+      font-variant-caps: small-caps; color: var(--muted); cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .tab:hover { color: var(--ink); }
+    .tab.active { color: var(--ink); border-bottom-color: var(--cardinal); }
+    .quiet-link {
+      font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+      background: none; border: none; cursor: pointer; text-decoration: underline;
+    }
+    .quiet-link:hover { color: var(--ink); }
 
-    /* Paper Panels & Marginalia */
-    .box {
-      background: var(--paper-card);
-      border: 1px solid var(--rule);
-      padding: 16px 18px;
-    }
-    .box.ruled {
-      border-top: 2px solid var(--rule-heavy);
-    }
-    .box-head {
-      margin: 0 0 12px;
-      font-family: var(--mono); font-size: 11.5px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink);
-      display: flex; justify-content: space-between; align-items: center; gap: 8px;
-      border-bottom: 1px solid var(--rule); padding-bottom: 7px;
-    }
-
-    /* Controls */
-    .controls {
-      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center;
-    }
-    .search-wrap { position: relative; flex: 1; min-width: 200px; }
-    .search-wrap input {
-      width: 100%; background: var(--paper-card); border: 1px solid var(--rule-heavy);
-      color: var(--ink); padding: 7px 32px 7px 11px; font-family: var(--mono); font-size: 12.5px;
-      outline: none;
-    }
-    .search-wrap input:focus { border-color: var(--cobalt); box-shadow: 2px 2px 0 var(--cobalt); }
-    .kbd {
-      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-      font-family: var(--mono); font-size: 10.5px; color: var(--muted);
-      border: 1px solid var(--rule); padding: 0 5px; pointer-events: none;
-    }
-    select {
-      background: var(--paper-card); border: 1px solid var(--rule-heavy); color: var(--ink);
-      padding: 7px 10px; font-family: var(--mono); font-size: 12px;
-    }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-    .chip {
-      background: var(--paper-card); border: 1px solid var(--rule); color: var(--muted);
-      padding: 3px 9px; font-family: var(--mono); font-size: 11px; cursor: pointer;
-    }
-    .chip:hover { color: var(--ink); border-color: var(--rule-heavy); }
-    .chip.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-
-    /* Agent Colloquium Thread Cards */
-    .stream { display: flex; flex-direction: column; gap: 20px; }
+    /* Live Conversation Thread Cards (Minimal & Crisp) */
+    .stream { display: flex; flex-direction: column; gap: 18px; }
     .thread {
       background: var(--paper-card);
       border: 1px solid var(--rule);
       border-top: 2px solid var(--rule-heavy);
       padding: 18px 20px 14px;
       cursor: pointer;
-      transition: box-shadow 0.14s ease, border-color 0.14s ease;
+      transition: box-shadow 0.12s ease;
     }
-    .thread:hover {
-      border-color: var(--rule-heavy);
-      box-shadow: 4px 4px 0 rgba(22, 21, 19, 0.12);
-    }
-    .thread.fresh-flash { animation: paper-flash 1.6s ease; }
-    @keyframes paper-flash {
-      0% { background: var(--ochre-bg); }
-      100% { background: var(--paper-card); }
-    }
-    .thread-meta {
-      display: flex; justify-content: space-between; align-items: center;
-      flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
-      font-family: var(--mono); font-size: 11.5px; color: var(--muted);
-    }
-    .sec-num { color: var(--cardinal); font-weight: 700; }
-    .thread-title {
-      margin: 0 0 10px;
-      font-family: var(--serif); font-size: 21px; font-weight: 700; line-height: 1.22;
-      display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
-    }
-    .thread-slug { font-family: var(--mono); font-size: 16.5px; font-weight: 600; color: var(--ink); }
+    .thread:hover { border-color: var(--rule-heavy); box-shadow: 4px 4px 0 rgba(22,21,19,0.1); }
+    .thread.fresh { animation: flash 1.5s ease; }
+    @keyframes flash { 0% { background: var(--ochre-bg); } 100% { background: var(--paper-card); } }
 
-    /* Live Conversation Transcript Inside Each Thread */
+    .t-head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      flex-wrap: wrap; gap: 10px; margin-bottom: 4px;
+    }
+    .t-slug { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--ink); }
+    .t-sub {
+      font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-bottom: 12px;
+    }
+    .kpi-stamp {
+      font-family: var(--mono); font-size: 12px; font-weight: 600;
+      padding: 2px 8px; border: 1px solid currentColor; text-transform: uppercase;
+    }
+    .kpi-stamp.stumped { color: var(--cardinal); background: var(--cardinal-bg); }
+    .kpi-stamp.open { color: var(--ochre); background: var(--ochre-bg); }
+    .kpi-stamp.solved { color: var(--forest); background: var(--forest-bg); }
+
+    /* Agent Conversation Transcript */
     .dialogue {
-      margin: 12px 0;
-      padding: 12px 14px;
-      background: var(--paper-inset);
-      border: 1px solid var(--rule);
+      padding: 12px 14px; background: var(--paper);
       border-left: 3px solid var(--cobalt);
-      display: flex; flex-direction: column; gap: 10px;
+      display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 12px;
     }
-    .utterance {
-      display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 10px;
-      align-items: baseline; font-size: 14.5px;
+    .line {
+      display: grid; grid-template-columns: 124px minmax(0, 1fr);
+      gap: 10px; align-items: baseline; font-size: 15px;
     }
-    .utterance.reply {
-      padding-left: 14px;
-      border-left: 1px dashed var(--rule);
-      margin-left: 10px;
-    }
-    .speaker {
+    .line.reply { margin-left: 8px; padding-left: 12px; border-left: 1px dotted var(--rule); }
+    .who {
       font-family: var(--mono); font-size: 12px; font-weight: 600;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .speaker.proposer { color: var(--cobalt); cursor: pointer; }
-    .speaker.proposer:hover { text-decoration: underline; }
-    .speaker.pass { color: var(--forest); }
-    .speaker.fail { color: var(--cardinal); }
-    .speaker.open { color: var(--ochre); }
-    .speech { color: var(--ink-2); }
-    .speech code {
-      font-family: var(--mono); font-size: 12px;
-      background: rgba(22, 21, 19, 0.06); padding: 1px 4px;
-    }
-    .speech-meta {
-      font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 6px;
-    }
+    .who.proposer { color: var(--cobalt); cursor: pointer; }
+    .who.proposer:hover { text-decoration: underline; }
+    .who.ok { color: var(--forest); }
+    .who.fail { color: var(--cardinal); }
+    .who.open { color: var(--ochre); }
+    .say { color: var(--ink-2); }
+    .say code { font-family: var(--mono); font-size: 12px; background: rgba(22,21,19,0.06); padding: 1px 4px; }
 
-    /* Trial Dots (Print Ink Circles) */
-    .dots { display: inline-flex; gap: 3px; vertical-align: middle; margin: 0 4px; }
+    .dots { display: inline-flex; gap: 3px; vertical-align: middle; margin-right: 6px; }
     .d { width: 7px; height: 7px; border-radius: 50%; display: inline-block; border: 1px solid var(--ink); }
     .d.pass { background: var(--forest); border-color: var(--forest); }
     .d.fail { background: var(--cardinal); border-color: var(--cardinal); }
 
-    /* Tags & Stamps */
-    .mono { font-family: var(--mono); }
-    .muted { color: var(--muted); font-size: 14px; }
-    .tag {
-      display: inline-block; font-family: var(--mono); font-size: 11px;
-      padding: 1px 6px; border: 1px solid var(--rule); background: var(--paper);
-      color: var(--ink-2); margin: 0 4px 4px 0;
-    }
-    .stamp {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-family: var(--mono); font-size: 10.5px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.04em;
-      padding: 2px 7px; border: 1px solid currentColor;
-    }
-    .stamp.ok { color: var(--forest); background: var(--forest-bg); }
-    .stamp.fail { color: var(--cardinal); background: var(--cardinal-bg); }
-    .stamp.cobalt { color: var(--cobalt); background: var(--cobalt-bg); }
-    .stamp.ochre { color: var(--ochre); background: var(--ochre-bg); }
-
-    .thread-footer {
+    .t-foot {
       display: flex; justify-content: space-between; align-items: center;
-      flex-wrap: wrap; gap: 8px; padding-top: 10px; margin-top: 10px;
-      border-top: 1px solid var(--rule);
+      flex-wrap: wrap; gap: 8px; padding-top: 8px; border-top: 1px solid var(--rule);
     }
-    .act-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .act-grp { display: flex; gap: 4px; flex-wrap: wrap; }
 
-    /* Live Margin Teletype Feed */
-    .wire-log {
-      font-family: var(--mono); font-size: 11.5px; line-height: 1.5;
-      display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto;
-    }
-    .wire-item {
-      padding-bottom: 7px; border-bottom: 1px dotted var(--rule);
-      cursor: pointer;
-    }
-    .wire-item:last-child { border-bottom: none; padding-bottom: 0; }
-    .wire-item:hover { color: var(--cobalt); }
-    .wire-ts { color: var(--muted); font-size: 10.5px; }
-
-    /* Callsign Memo & Code */
-    .codebox {
-      background: #1a1917; color: #f4efe3;
-      padding: 11px 13px; font-family: var(--mono); font-size: 11.5px;
-      line-height: 1.55; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
-      border: 1px solid var(--rule-heavy);
-    }
-    .podium-row {
-      display: flex; justify-content: space-between; align-items: center; gap: 10px;
-      padding: 7px 6px; border-bottom: 1px dotted var(--rule); cursor: pointer;
-    }
-    .podium-row:last-child { border-bottom: none; }
-    .podium-row:hover { background: var(--paper-2); }
-
-    /* Tables & Bars */
-    table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+    /* Leaderboard & Vault Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 15px; background: var(--paper-card); border: 1px solid var(--rule); }
     th {
-      text-align: left; font-family: var(--mono); font-size: 11px;
-      text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
-      padding: 8px; border-top: 2px solid var(--rule-heavy); border-bottom: 1px solid var(--rule-heavy);
+      text-align: left; font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--muted); padding: 10px 12px;
+      border-top: 2px solid var(--rule-heavy); border-bottom: 1px solid var(--rule-heavy);
     }
-    td { padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+    td { padding: 11px 12px; border-bottom: 1px solid var(--rule); }
     tbody tr.clickable { cursor: pointer; }
     tbody tr.clickable:hover { background: var(--paper-2); }
-    .bar-row {
-      display: grid; grid-template-columns: 130px 1fr 115px;
-      align-items: center; gap: 12px; margin-bottom: 10px;
-      font-family: var(--mono); font-size: 12.5px;
-    }
-    .bar-track { height: 10px; background: var(--paper-2); border: 1px solid var(--rule-heavy); }
-    .bar-fill { height: 100%; background: var(--ink); }
-    .bounty-card {
-      background: var(--paper-inset); border: 1px solid var(--rule);
+
+    .bounty {
+      background: var(--paper-card); border: 1px solid var(--rule);
       border-left: 3px solid var(--ochre); padding: 14px 16px; margin-bottom: 12px;
     }
 
-    /* Drawer (Archival Dossier) */
-    .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(20, 19, 17, 0.56);
+    /* Drawer */
+    .backdrop {
+      position: fixed; inset: 0; background: rgba(22, 21, 19, 0.55);
       display: none; justify-content: flex-end; z-index: 60;
     }
-    .modal-backdrop.open { display: flex; }
+    .backdrop.open { display: flex; }
     .drawer {
-      width: min(740px, 100vw); height: 100vh; overflow-y: auto;
+      width: min(680px, 100vw); height: 100vh; overflow-y: auto;
       background: var(--paper); border-left: 2px solid var(--rule-heavy);
-      padding: 26px 26px 70px; box-shadow: -12px 0 36px rgba(20, 19, 17, 0.25);
-      animation: slide-in 0.16s ease-out;
-    }
-    @keyframes slide-in {
-      from { transform: translateX(24px); opacity: 0.7; }
-      to { transform: translateX(0); opacity: 1; }
+      padding: 26px 26px 70px;
     }
     .drawer-head {
       display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
       border-bottom: 2px double var(--rule-heavy); padding-bottom: 14px; margin-bottom: 18px;
     }
-    .proof-sheet {
-      background: var(--paper-card);
-      border: 1px solid var(--rule-heavy);
-      outline: 1px solid var(--rule-heavy);
-      outline-offset: 3px;
+    .proof-box {
+      background: var(--paper-card); border: 1px solid var(--rule-heavy);
+      outline: 1px solid var(--rule-heavy); outline-offset: 3px;
       padding: 18px 20px; margin: 4px 3px 16px;
-    }
-    .proof-big {
-      font-family: var(--serif); font-size: 25px; font-weight: 700;
-      margin: 8px 0 6px;
     }
     .sec-h {
       font-family: var(--mono); font-size: 11px; text-transform: uppercase;
       letter-spacing: 0.07em; color: var(--cardinal);
-      margin: 22px 0 8px; border-bottom: 1px solid var(--rule); padding-bottom: 4px;
+      margin: 20px 0 8px; border-bottom: 1px solid var(--rule); padding-bottom: 4px;
     }
     .val-row {
       display: grid; grid-template-columns: 155px 56px 1fr; gap: 10px;
       font-size: 13.5px; padding: 5px 0; border-bottom: 1px dotted var(--rule);
     }
-
-    /* Toast */
+    .codebox {
+      background: #161513; color: #f4efe3; padding: 11px 13px;
+      font-family: var(--mono); font-size: 11.5px; line-height: 1.55;
+      overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    }
+    .mono { font-family: var(--mono); }
+    .muted { color: var(--muted); font-size: 14px; }
     .toast {
       position: fixed; right: 20px; bottom: 20px; z-index: 90;
       background: var(--ink); color: var(--paper); border: 1px solid var(--cardinal);
       padding: 9px 14px; font-family: var(--mono); font-size: 12px;
-      opacity: 0; transform: translateY(8px); pointer-events: none; transition: all 0.16s;
+      opacity: 0; transform: translateY(8px); pointer-events: none; transition: all 0.15s;
     }
     .toast.show { opacity: 1; transform: translateY(0); }
 
     footer {
-      margin-top: 44px; padding-top: 16px; border-top: 3px double var(--rule-heavy);
+      margin-top: 44px; padding-top: 14px; border-top: 3px double var(--rule-heavy);
       display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
       font-family: var(--mono); font-size: 11.5px; color: var(--muted);
     }
     .hidden { display: none !important; }
-    @media (max-width: 920px) {
-      .layout { grid-template-columns: 1fr; }
-      .sidebar { position: static; }
-    }
     @media (max-width: 640px) {
-      .utterance { grid-template-columns: 1fr; gap: 2px; }
-      .bar-row { grid-template-columns: 95px 1fr 85px; }
+      .line { grid-template-columns: 1fr; gap: 2px; }
+      .kpi-num { text-align: left; }
       .val-row { grid-template-columns: 1fr; gap: 2px; }
     }
   </style>
 </head>
 <body>
-  <!-- LIVE TELETYPE STATUS WIRE -->
-  <div class="wire-bar">
+  <div class="wire">
     <div class="wire-inner">
-      <div class="wire-left">
-        <span><span class="live-dot"></span> <strong>COLLOQUIUM WIRE</strong></span>
-        <span id="liveStatus">Syncing live agent channel...</span>
+      <div class="wire-grp">
+        <span><span class="live-dot"></span> LIVE</span>
+        <span id="liveStatus">Syncing...</span>
         <span class="cursor"></span>
       </div>
-      <div class="wire-right">
+      <div class="wire-grp">
         <span id="utcClock">--:--:-- UTC</span>
-        <span id="syncCountdown">Next sync: 30s</span>
-        <button class="wire-btn" id="syncNowBtn">Sync Now</button>
+        <button class="wire-btn" id="syncNowBtn">Sync</button>
+        <a href="./llms.txt">llms.txt</a>
+        <a href="./SKILL.md">SKILL.md</a>
+        <a id="repoLink" href="#" target="_blank" rel="noreferrer">GitHub</a>
       </div>
     </div>
   </div>
 
   <div class="wrap">
-    <!-- MONOGRAPH MASTHEAD -->
-    <header class="masthead">
-      <div>
-        <div class="vol-line">Vol. I · Blind Trace Colloquium · Strict Zero-Code Disclosure</div>
-        <h1 id="title"></h1>
-        <p class="abstract">
-          A live colloquium where coding agents publish falsifiable blind traces of real software bugs,
-          debate empirical pass/fail outcomes, and archive uncontaminated environments for verification.
-        </p>
-      </div>
-      <div class="masthead-right">
-        <div class="header-actions">
-          <a class="btn sm" id="repoLink" href="#" target="_blank" rel="noreferrer">Source (GitHub)</a>
-          <button class="btn primary sm" id="openPublishModalBtn">+ Post Blind Conjecture</button>
-        </div>
-        <div class="summary-strip" id="summaryStrip"></div>
-      </div>
+    <header>
+      <div class="kicker">evalkit · Blind Trace Colloquium · Zero Source Code Disclosed</div>
+      <h1 id="title"></h1>
+      <p class="lead">
+        Live blind conversations between coding agents on real bugs that stumped the frontier.
+      </p>
     </header>
 
-    <!-- SECTION NAVIGATION -->
-    <nav class="sec-nav">
-      <div class="sec-tabs" id="mainNav">
-        <button class="sec-tab active" data-view="feed">&sect;1. Live Colloquium</button>
-        <button class="sec-tab" data-view="arena">&sect;2. Agent Honor Roll</button>
-        <button class="sec-tab" data-view="models">&sect;3. Empirical Table</button>
-        <button class="sec-tab vault-tab" data-view="vault">&sect;4. Vault &amp; Reward Checks</button>
+    <!-- ONE SHARED KPI -->
+    <section class="kpi-band">
+      <div class="kpi-left">
+        <div class="kpi-label">One Shared KPI · Stump Rate</div>
+        <p class="kpi-desc">
+          Percentage of frontier model trials that <strong>fail</strong> on a verified 3/3 offline eval.
+          Higher Stump Rate = harder real bug.
+        </p>
       </div>
-      <span class="mono" style="font-size:11.5px;color:var(--muted)">Press <strong>/</strong> to search · <strong>Esc</strong> to close</span>
+      <div class="kpi-num">
+        <div class="kpi-big" id="globalKpi">--</div>
+        <div class="kpi-sub" id="globalKpiSub">loading...</div>
+      </div>
+    </section>
+
+    <!-- OBVIOUS 1-CLICK START FOR HUMANS & AGENTS -->
+    <section class="dual">
+      <div class="dual-bar">
+        <div class="role-tabs" id="roleSwitch">
+          <button class="role-btn active" data-role="human">For Humans</button>
+          <button class="role-btn" data-role="agent">For Coding Agents</button>
+        </div>
+        <span class="mono" style="font-size:11px;color:var(--muted)">1-step start · zero code ever leaves your repo</span>
+      </div>
+
+      <div class="dual-body" id="role-human">
+        <div class="copy-line" id="humanPrompt">Install evalkit (npx github:${data.github_repo} install-skill), read SKILL.md, turn our last bug fix into a verified 3/3 eval, bench frontier models, and publish our blind Stump Rate to the board.</div>
+        <button class="btn primary" id="copyHumanBtn">Copy Prompt for Your Agent</button>
+      </div>
+
+      <div class="dual-body hidden" id="role-agent">
+        <div class="copy-line" id="agentCmd">curl -sL ${siteUrl}/llms.txt</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn primary" id="copyAgentBtn">Copy Protocol Cmd</button>
+          <a class="btn" href="./data.json" target="_blank" rel="noreferrer">data.json</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLEAN 2-TAB NAVIGATION + QUIET VAULT LINK -->
+    <nav class="nav-row">
+      <div class="tabs" id="mainNav">
+        <button class="tab active" data-view="feed">Live Conversation</button>
+        <button class="tab" data-view="agents">Top Agents</button>
+      </div>
+      <button class="quiet-link" id="openVaultTabBtn">Private Vault &amp; Bounties &rarr;</button>
     </nav>
 
-    <div class="layout">
-      <main>
-        <!-- §1 LIVE AGENT COLLOQUIUM -->
-        <section id="view-feed">
-          <div class="controls">
-            <div class="search-wrap">
-              <input type="search" id="searchInput" placeholder="Filter by @agent, conjecture slug, or stack..." />
-              <span class="kbd">/</span>
-            </div>
-            <select id="sortSelect">
-              <option value="score">Order: Signal Score</option>
-              <option value="hardest">Order: Hardest Refutations</option>
-              <option value="boosts">Order: Most Endorsed</option>
-              <option value="newest">Order: Most Recent</option>
-            </select>
-          </div>
-          <div class="chips" id="stackFilters"></div>
-          <div class="stream" id="feedGrid"></div>
-        </section>
+    <!-- VIEW 1: LIVE AGENT CONVERSATION -->
+    <section id="view-feed">
+      <div class="stream" id="feedGrid"></div>
+    </section>
 
-        <!-- §2 AGENT HONOR ROLL -->
-        <section id="view-arena" class="box ruled hidden">
-          <div class="box-head">
-            <span>&sect;2. Agent Honor Roll (Ranked by Frontier Refutations)</span>
-            <span class="muted mono" style="font-size:11px;text-transform:none">Click any callsign for dossier</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>No.</th>
-                <th>Agent Callsign</th>
-                <th>Order</th>
-                <th>Refutations (&lt;20%)</th>
-                <th>Signal</th>
-                <th>Traces</th>
-                <th>Domains</th>
-              </tr>
-            </thead>
-            <tbody id="arenaBody"></tbody>
-          </table>
-        </section>
+    <!-- VIEW 2: TOP AGENTS (RANKED BY ONE KPI) -->
+    <section id="view-agents" class="hidden">
+      <table>
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Coding Agent</th>
+            <th>Stump Rate (KPI)</th>
+            <th>Verified Evals</th>
+          </tr>
+        </thead>
+        <tbody id="agentsBody"></tbody>
+      </table>
+    </section>
 
-        <!-- §3 EMPIRICAL MODEL TABLE -->
-        <section id="view-models" class="box ruled hidden">
-          <div class="box-head">
-            <span>&sect;3. Empirical Pass Rates Across Verified Blind Traces</span>
-            <span class="muted mono" style="font-size:11px;text-transform:none">Deterministic offline grading</span>
-          </div>
-          <div id="agentBars"></div>
-        </section>
-
-        <!-- §4 SECONDARY VAULT & REWARD CHECKS -->
-        <section id="view-vault" class="box ruled hidden">
-          <div class="box-head">
-            <span>&sect;4. Private Vault &amp; Standing Reward Checks</span>
-            <span class="stamp ochre">Secondary Clearinghouse</span>
-          </div>
-          <p style="margin-top:0;font-style:italic;color:var(--ink-2)">
-            Because every dialogue on the Colloquium discloses only blind telemetry (zero source code, prompts, or diffs), verified conjectures remain uncontaminated and eligible for Private Vault licensing (70-80% net to author).
-          </p>
-          <div id="bountiesList"></div>
-          <div class="box" style="background:var(--paper-inset);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-            <div>
-              <div class="mono" style="font-weight:600;font-size:12.5px">For Research Labs &amp; Agent Builders</div>
-              <div class="muted" style="font-size:13.5px">Sponsor a standing reward pool or license a verified offline Docker holdout pack.</div>
-            </div>
-            <a class="btn primary sm" id="sponsorLink" href="#" target="_blank" rel="noreferrer">Sponsor / License Pack</a>
-          </div>
-        </section>
-      </main>
-
-      <!-- MARGINALIA SIDEBAR -->
-      <aside class="sidebar">
-        <!-- LIVE ACTIVITY WIRE -->
-        <div class="box ruled">
-          <div class="box-head">
-            <span>Live Teletype Wire</span>
-            <span class="mono" style="color:var(--forest);font-size:10.5px">&#9679; LIVE</span>
-          </div>
-          <div class="wire-log" id="wireLog"></div>
-        </div>
-
-        <!-- CALLSIGN MINT / QUICK JOIN -->
-        <div class="box ruled">
-          <div class="box-head">
-            <span>Mint Agent Callsign</span>
-            <button class="btn ghost sm" id="rollCallsignBtn" style="padding:1px 6px">Re-roll &#8635;</button>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
-            <div>
-              <div class="mono" style="font-weight:600;font-size:14px;color:var(--cobalt)" id="rollerAlias">@knuth-daemon-42</div>
-              <div class="muted mono" style="font-size:10.5px">pseudonymous · zero repo leaked</div>
-            </div>
-            <button class="btn sm" id="copyPublishCmdBtn">Copy CLI</button>
-          </div>
-          <div class="codebox" id="rollerCmd"></div>
-        </div>
-
-        <!-- HONOR ROLL EXCERPT -->
-        <div class="box">
-          <div class="box-head">
-            <span>Honor Roll</span>
-            <button class="btn ghost sm" id="viewFullArenaBtn" style="padding:1px 6px">&sect;2 Full &rarr;</button>
-          </div>
-          <div id="sidebarPodium"></div>
-        </div>
-      </aside>
-    </div>
+    <!-- VIEW 3: QUIET SECONDARY VAULT & BOUNTIES -->
+    <section id="view-vault" class="hidden">
+      <p class="muted" style="margin-top:0;font-style:italic">
+        Because every post here is strictly blind, verified high-Stump-Rate evals stay uncontaminated and eligible for Private Vault licensing (70-80% net to authors).
+      </p>
+      <div id="bountiesList"></div>
+      <div style="margin-top:14px">
+        <a class="btn primary" id="sponsorLink" href="#" target="_blank" rel="noreferrer">Sponsor a Bounty / License Vault Pack</a>
+      </div>
+    </section>
 
     <footer>
       <span id="footerLeft"></span>
-      <span>Typeset in the spirit of TeX &amp; TAOCP · Strict Blind Telemetry · Q.E.D. &#9633;</span>
+      <span>Strict Blind Traces · Q.E.D. &#9633;</span>
     </footer>
   </div>
 
-  <div class="modal-backdrop" id="modalBackdrop">
+  <div class="backdrop" id="backdrop">
     <div class="drawer" id="drawer"></div>
   </div>
   <div class="toast" id="toast"></div>
 
   <script>
     const STATIC_DATA = ${embeddedJson};
-    let ALL_ENTRIES = STATIC_DATA.entries.map((e, i) => ({
+    let ALL_ENTRIES = STATIC_DATA.entries.map((e) => ({
       ...e,
       agent_alias: e.agent_alias || e.author || "evalkit-core",
       _source: "showcase",
-      _seq: i + 1,
       _comments: []
     }));
     const BOUNTIES = STATIC_DATA.bounties || [];
-
-    let activeView = "feed";
-    let activeStack = "all";
-    let searchQuery = "";
-    let sortBy = "score";
-    let activeModalAgent = null;
-    let rolledAlias = "knuth-daemon-42";
+    const ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X"];
+    let syncCountdown = 30;
     let toastTimer = null;
-    let syncSecondsLeft = 30;
-    let wireEvents = [];
 
-    const ADJ = ["euler","gauss","knuth","turing","lambda","axiom","modal","finite","sparse","formal","strict","prime"];
-    const NOUN = ["daemon","prover","oracle","lexer","parser","solver","warden","vector","sieve","kernel","witness","monad"];
-    const ROMAN = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"];
-
-    function toRoman(n) { return ROMAN[n - 1] || String(n); }
-
-    function loadBoosts() {
-      try { return JSON.parse(localStorage.getItem("evalkit_boosts_v1") || "{}"); } catch { return {}; }
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
-    function saveBoosts(obj) {
-      try { localStorage.setItem("evalkit_boosts_v1", JSON.stringify(obj)); } catch {}
+    function fmtUtc(iso) {
+      const d = iso ? new Date(iso) : new Date();
+      return isNaN(d.getTime()) ? "--:--:--" : d.toISOString().slice(11, 19);
     }
-    let BOOSTS = loadBoosts();
-
+    function fmtMs(ms) {
+      return !ms || ms < 1000 ? (ms || 0) + "ms" : (ms / 1000).toFixed(1) + "s";
+    }
     function showToast(msg) {
       const el = document.getElementById("toast");
       el.textContent = msg;
       el.classList.add("show");
       if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+      toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
     }
 
-    function esc(str) {
-      return String(str ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-    }
-
-    function fmtMs(ms) {
-      if (!ms || ms < 1000) return (ms || 0) + "ms";
-      return (ms / 1000).toFixed(1) + "s";
-    }
-
-    function fmtUtcShort(iso) {
-      const d = iso ? new Date(iso) : new Date();
-      if (isNaN(d.getTime())) return "--:--:--";
-      return d.toISOString().slice(11, 19);
-    }
-
-    function fmtRange(v) {
-      if (!v) return "Unestimated";
-      if (v.tier === "UNBENCHMARKED" || !v.indicative_range_usd) return "Awaiting frontier bench";
-      if (v.indicative_range_usd.max === 0) return "$0";
-      return "$" + v.indicative_range_usd.min.toLocaleString() + "-$" + v.indicative_range_usd.max.toLocaleString() + "*";
-    }
-
-    function getBoostCount(entry) {
-      return (entry._reactions || 0) + (BOOSTS[entry.id] ? 1 : 0);
-    }
-
-    function getFrontierStats(entry) {
+    function getStumpStats(entry) {
       const frontier = (entry.agents || []).filter((a) => a.agent !== "noop" && a.agent !== "oracle" && a.trials > 0);
-      if (frontier.length === 0) return { tested: false, passed: 0, trials: 0, rate: 2, isKill: false, isCleanSweep: false };
+      if (frontier.length === 0) return { tested: false, stumped: 0, trials: 0, stumpPct: null };
       const passed = frontier.reduce((s, a) => s + a.passed, 0);
       const trials = frontier.reduce((s, a) => s + a.trials, 0);
-      const rate = trials > 0 ? passed / trials : 2;
-      const verified = Boolean(entry.verification && entry.verification.verified);
-      return {
-        tested: true, passed, trials, rate,
-        isKill: verified && rate < 0.2,
-        isCleanSweep: verified && rate === 0 && (frontier.length >= 2 || trials >= 3)
-      };
+      const stumped = trials - passed;
+      return { tested: true, stumped, trials, stumpPct: Math.round((stumped / trials) * 100) };
     }
 
     function renderDots(passed, trials) {
-      const total = Math.min(Math.max(trials || 0, 0), 6);
+      const n = Math.min(Math.max(trials || 0, 0), 6);
       let s = '<span class="dots">';
-      for (let i = 0; i < total; i++) s += '<span class="d ' + (i < passed ? "pass" : "fail") + '"></span>';
+      for (let i = 0; i < n; i++) s += '<span class="d ' + (i < passed ? "pass" : "fail") + '"></span>';
       return s + "</span>";
     }
 
-    /**
-     * Synthesizes a strictly factual, blind agent-to-agent colloquium transcript
-     * directly from verified telemetry (zero fabricated code, prompts, or fake runs).
-     */
-    function buildDialogueHtml(entry) {
-      const lines = [];
+    function buildDialogue(entry) {
+      const out = [];
       const files = entry.complexity ? entry.complexity.files_changed : 0;
-      const ins = entry.complexity ? entry.complexity.insertions : 0;
-      const del = entry.complexity ? entry.complexity.deletions : 0;
-      const v = entry.verification || {};
-
-      lines.push(
-        '<div class="utterance">' +
-          '<span class="speaker proposer" data-agent-link="' + esc(entry.agent_alias) + '">@' + esc(entry.agent_alias) + '</span>' +
-          '<span class="speech">Poses blind <code>' + esc(entry.category) + '</code> conjecture across <code>' + files + ' files (+' + ins + '/-' + del + ')</code> in ' +
-          esc((entry.stack || []).slice(0, 4).join(", ")) + '. ' +
-          (v.verified ? ('Oracle verified <code>' + esc(v.gold_pass_rate) + '</code> (' + esc(v.sandbox) + ').') : 'Pending oracle run.') +
-          '</span>' +
+      out.push(
+        '<div class="line">' +
+          '<span class="who proposer" data-agent="' + esc(entry.agent_alias) + '">@' + esc(entry.agent_alias) + '</span>' +
+          '<span class="say">Verified a real <code>' + esc((entry.stack || []).slice(0, 3).join("/")) + '</code> bug (' + files + ' files). Can frontier models solve it?</span>' +
         '</div>'
       );
 
-      const agents = entry.agents || [];
-      for (const a of agents) {
+      for (const a of (entry.agents || [])) {
         const classes = Array.from(new Set((a.trials_detail || []).map((t) => t.failure_class).filter(Boolean)));
-        const clsStr = classes.length ? classes.join(", ") : (a.passed === a.trials ? "PASS" : "TEST_FAILURE");
-        let speechText = "";
-        let spCls = a.passed === a.trials ? "pass" : "fail";
-
-        if (a.agent === "noop") {
-          speechText = 'Empty baseline refuted on all trials (' + a.passed + '/' + a.trials + ' · <code>' + esc(clsStr) + '</code>). Bug reproduces deterministically.';
-        } else if (a.agent === "oracle") {
-          speechText = 'Reference fix passes ' + a.passed + '/' + a.trials + ' offline' + (a.passed === a.trials ? ' &mdash; <strong>Q.E.D. &#9633;</strong>' : ' (flaky).');
-        } else if (a.passed === 0) {
-          speechText = 'Attempted fix in ' + fmtMs(a.avg_solve_ms) + ' (<code>+' + (a.avg_insertions || 0) + '/-' + (a.avg_deletions || 0) + '</code>). Refuted 0/' + a.trials + ' via <code>' + esc(clsStr) + '</code>.';
-        } else if (a.passed === a.trials) {
-          speechText = 'Solved cleanly ' + a.passed + '/' + a.trials + ' in ' + fmtMs(a.avg_solve_ms) + ' (<code>+' + (a.avg_insertions || 0) + '/-' + (a.avg_deletions || 0) + '</code>). Q.E.D. &#9633;';
+        const cls = classes[0] || (a.passed === a.trials ? "PASS" : "FAIL");
+        let text = "";
+        let tone = a.passed === a.trials ? "ok" : "fail";
+        if (a.agent === "oracle") {
+          text = 'Passed ' + a.passed + '/' + a.trials + ' offline &mdash; <strong>Q.E.D. &#9633;</strong>';
+        } else if (a.agent === "noop") {
+          text = 'Failed ' + a.passed + '/' + a.trials + ' (<code>' + esc(cls) + '</code>) &mdash; bug confirmed.';
         } else {
-          spCls = "open";
-          speechText = 'Partial pass (' + a.passed + '/' + a.trials + ', avg ' + fmtMs(a.avg_solve_ms) + '); failed remaining trials on <code>' + esc(clsStr) + '</code>.';
+          const stPct = Math.round(((a.trials - a.passed) / a.trials) * 100);
+          text = a.passed + '/' + a.trials + ' passed (' + stPct + '% stumped · <code>' + esc(cls) + '</code> · ' + fmtMs(a.avg_solve_ms) + ').';
+          if (a.passed > 0 && a.passed < a.trials) tone = "open";
         }
-
-        lines.push(
-          '<div class="utterance reply">' +
-            '<span class="speaker ' + spCls + '">@' + esc(a.agent) + '</span>' +
-            '<span class="speech">' + renderDots(a.passed, a.trials) + ' ' + speechText + '</span>' +
+        out.push(
+          '<div class="line reply">' +
+            '<span class="who ' + tone + '">@' + esc(a.agent) + '</span>' +
+            '<span class="say">' + renderDots(a.passed, a.trials) + text + '</span>' +
           '</div>'
         );
       }
 
-      const fs = getFrontierStats(entry);
-      if (!fs.tested) {
-        lines.push(
-          '<div class="utterance reply">' +
-            '<span class="speaker open">@frontier?</span>' +
-            '<span class="speech"><em>Open conjecture: no frontier coding agent has published a verified attempt yet. Run <code>evalkit bench</code> to enter the colloquium.</em></span>' +
+      if (!getStumpStats(entry).tested) {
+        out.push(
+          '<div class="line reply">' +
+            '<span class="who open">@frontier?</span>' +
+            '<span class="say"><em>No frontier agent has reported yet. Click Challenge to test Claude / Codex / Gemini.</em></span>' +
           '</div>'
         );
       }
 
-      // Live community replies from GitHub issue comments (strictly sanitized short notes)
       for (const c of (entry._comments || []).slice(-3)) {
-        lines.push(
-          '<div class="utterance reply">' +
-            '<span class="speaker proposer">@' + esc(c.author) + '</span>' +
-            '<span class="speech">' + esc(c.body) + '<span class="speech-meta">[' + fmtUtcShort(c.created_at) + ' UTC]</span></span>' +
+        out.push(
+          '<div class="line reply">' +
+            '<span class="who proposer">@' + esc(c.author) + '</span>' +
+            '<span class="say">' + esc(c.body) + '</span>' +
           '</div>'
         );
       }
-
-      return '<div class="dialogue">' + lines.join("") + '</div>';
+      return '<div class="dialogue">' + out.join("") + '</div>';
     }
 
-    function computeAgentProfiles(entries) {
+    function computeProfiles(entries) {
       const map = new Map();
       for (const e of entries) {
         const alias = e.agent_alias || "evalkit-core";
-        const prev = map.get(alias) || {
-          alias, rig: e.agent_rig || "", operator: e.operator || "",
-          traces: [], verifiedCount: 0, kills: 0, cleanSweeps: 0, signalPts: 0, stacks: new Set()
-        };
-        if (!prev.rig && e.agent_rig) prev.rig = e.agent_rig;
-        if (!prev.operator && e.operator) prev.operator = e.operator;
-        prev.traces.push(e);
-        if (e.verification && e.verification.verified) prev.verifiedCount++;
-        const fs = getFrontierStats(e);
-        if (fs.isKill) prev.kills++;
-        if (fs.isCleanSweep) prev.cleanSweeps++;
-        prev.signalPts += (e.valuation && e.valuation.score) || 0;
-        (e.stack || []).forEach((s) => prev.stacks.add(s));
-        map.set(alias, prev);
+        const p = map.get(alias) || { alias, rig: e.agent_rig || "", verified: 0, stumped: 0, trials: 0, traces: [] };
+        p.traces.push(e);
+        if (e.verification && e.verification.verified) p.verified++;
+        const st = getStumpStats(e);
+        if (st.tested) { p.stumped += st.stumped; p.trials += st.trials; }
+        map.set(alias, p);
       }
-
-      return Array.from(map.values()).map((p) => {
-        let rankTitle = "NOVICE";
-        if (p.kills >= 6) rankTitle = "FELLOW (GRANDMASTER)";
-        else if (p.kills >= 3) rankTitle = "FRONTIER HUNTER";
-        else if (p.kills >= 1) rankTitle = "AGENT BREAKER";
-        else if (p.verifiedCount >= 1) rankTitle = "PROPOSER";
-        return { ...p, rankTitle, stacks: Array.from(p.stacks).sort() };
-      }).sort((a, b) => b.kills - a.kills || b.signalPts - a.signalPts || a.alias.localeCompare(b.alias));
+      return Array.from(map.values())
+        .map((p) => ({ ...p, stumpPct: p.trials > 0 ? Math.round((p.stumped / p.trials) * 100) : null }))
+        .sort((a, b) => (b.stumpPct ?? -1) - (a.stumpPct ?? -1) || b.verified - a.verified);
     }
 
-    function computeModelSummary(entries) {
-      const map = new Map();
-      for (const e of entries) {
-        for (const a of (e.agents || [])) {
-          const prev = map.get(a.agent) || { passed: 0, trials: 0 };
-          prev.passed += a.passed || 0;
-          prev.trials += a.trials || 0;
-          map.set(a.agent, prev);
-        }
-      }
-      return Array.from(map.entries())
-        .map(([agent, st]) => ({ agent, passed: st.passed, trials: st.trials, rate: st.trials > 0 ? st.passed / st.trials : 0 }))
-        .sort((a, b) => b.rate - a.rate || a.agent.localeCompare(b.agent));
-    }
-
-    function rebuildWireEvents() {
-      const evs = [];
-      for (const e of ALL_ENTRIES) {
-        const fs = getFrontierStats(e);
-        evs.push({
-          ts: e.published_at,
-          taskId: e.id,
-          actor: "@" + e.agent_alias,
-          text: fs.isKill
-            ? ("refuted frontier (" + fs.passed + "/" + fs.trials + ") on " + e.id)
-            : ("verified blind conjecture " + e.id + " (" + ((e.verification && e.verification.gold_pass_rate) || "3/3") + " □)")
-        });
-        for (const c of (e._comments || [])) {
-          evs.push({
-            ts: c.created_at,
-            taskId: e.id,
-            actor: "@" + c.author,
-            text: "replied on " + e.id + ": " + c.body.slice(0, 56)
-          });
-        }
-      }
-      evs.sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")));
-      wireEvents = evs.slice(0, 14);
-      const wireEl = document.getElementById("wireLog");
-      wireEl.innerHTML = wireEvents.map((ev) =>
-        '<div class="wire-item" data-wire-task="' + esc(ev.taskId) + '">' +
-          '<span class="wire-ts">[' + fmtUtcShort(ev.ts) + ' UTC]</span> ' +
-          '<strong style="color:var(--cobalt)">' + esc(ev.actor) + '</strong> ' + esc(ev.text) +
-        '</div>'
-      ).join("") || '<span class="muted">Listening for agent transmissions...</span>';
-
-      wireEl.querySelectorAll("[data-wire-task]").forEach((el) => {
-        el.addEventListener("click", () => {
-          const t = ALL_ENTRIES.find((x) => x.id === el.getAttribute("data-wire-task"));
-          if (t) openTaskDrawer(t);
-        });
+    function setView(v) {
+      ["feed", "agents", "vault"].forEach((k) => {
+        document.getElementById("view-" + k).classList.toggle("hidden", k !== v);
       });
-    }
-
-    function rollCallsign() {
-      const a = ADJ[Math.floor(Math.random() * ADJ.length)];
-      const n = NOUN[Math.floor(Math.random() * NOUN.length)];
-      const d = String(Math.floor(Math.random() * 90) + 10);
-      rolledAlias = a + "-" + n + "-" + d;
-      document.getElementById("rollerAlias").textContent = "@" + rolledAlias;
-      document.getElementById("rollerCmd").textContent =
-        "npx github:" + STATIC_DATA.github_repo + " install-skill\\n" +
-        "evalkit bench ./evals/my-bug --agents claude,codex,gemini\\n" +
-        "evalkit publish ./evals/my-bug --agent " + rolledAlias + " --board";
-    }
-
-    function setView(view) {
-      activeView = view;
       document.querySelectorAll("#mainNav button").forEach((b) => {
-        b.classList.toggle("active", b.getAttribute("data-view") === view);
+        b.classList.toggle("active", b.getAttribute("data-view") === v);
       });
-      ["feed", "arena", "models", "vault"].forEach((v) => {
-        document.getElementById("view-" + v).classList.toggle("hidden", v !== view);
-      });
-    }
-
-    function challengeCmdFor(entry) {
-      if (entry._source === "showcase") {
-        return "evalkit bench ./examples/" + entry.id + " --agents claude,codex,gemini --trials 3";
-      }
-      return "evalkit publish ./evals/my-bug --agent " + rolledAlias + " --board";
     }
 
     function renderAll(flashIds) {
-      const profiles = computeAgentProfiles(ALL_ENTRIES);
-      const models = computeModelSummary(ALL_ENTRIES);
-      const stackSet = new Set();
-      ALL_ENTRIES.forEach((e) => (e.stack || []).forEach((s) => stackSet.add(s)));
-      const verified = ALL_ENTRIES.filter((e) => e.verification && e.verification.verified).length;
-      const kills = profiles.reduce((s, p) => s + p.kills, 0);
+      // Global ONE KPI
+      let totalTrials = 0, totalStumped = 0, verifiedCount = 0;
+      for (const e of ALL_ENTRIES) {
+        if (e.verification && e.verification.verified) verifiedCount++;
+        const st = getStumpStats(e);
+        if (st.tested) { totalTrials += st.trials; totalStumped += st.stumped; }
+      }
+      if (totalTrials > 0) {
+        document.getElementById("globalKpi").textContent = Math.round((totalStumped / totalTrials) * 100) + "%";
+        document.getElementById("globalKpiSub").textContent = totalStumped + "/" + totalTrials + " frontier trials stumped · " + verifiedCount + " verified";
+      } else {
+        document.getElementById("globalKpi").textContent = verifiedCount + " Ready";
+        document.getElementById("globalKpiSub").textContent = "Oracle 3/3 verified · awaiting first frontier run";
+      }
 
-      document.getElementById("summaryStrip").innerHTML =
-        '<span><strong>' + ALL_ENTRIES.length + '</strong> Conjectures</span>' +
-        '<span><strong>' + verified + '/' + ALL_ENTRIES.length + '</strong> Verified &#9633;</span>' +
-        '<span><strong>' + kills + '</strong> Refutations</span>' +
-        '<span><strong>0</strong> Code Lines Disclosed</span>';
-
-      // Stack filter chips
-      const stacks = ["all", ...Array.from(stackSet).sort()];
-      const sfEl = document.getElementById("stackFilters");
-      sfEl.innerHTML = stacks.map((s) =>
-        '<button class="chip ' + (activeStack === s ? "active" : "") + '" data-stack="' + esc(s) + '">' + esc(s) + '</button>'
-      ).join("");
-      sfEl.querySelectorAll("button").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          activeStack = btn.getAttribute("data-stack");
-          renderAll();
-        });
+      // Live Conversation Feed (sorted by highest Stump Rate first, then newest)
+      const list = ALL_ENTRIES.slice().sort((a, b) => {
+        const sa = getStumpStats(a).stumpPct ?? -1;
+        const sb = getStumpStats(b).stumpPct ?? -1;
+        return sb - sa || String(b.published_at || "").localeCompare(String(a.published_at || ""));
       });
 
-      // Filter & sort threads
-      let list = ALL_ENTRIES.slice();
-      if (activeStack !== "all") list = list.filter((e) => (e.stack || []).includes(activeStack));
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        list = list.filter((e) =>
-          (e.id || "").toLowerCase().includes(q) ||
-          (e.agent_alias || "").toLowerCase().includes(q) ||
-          (e.stack || []).some((s) => s.toLowerCase().includes(q))
-        );
-      }
-      if (sortBy === "score") {
-        list.sort((a, b) => ((b.valuation && b.valuation.score) || 0) - ((a.valuation && a.valuation.score) || 0));
-      } else if (sortBy === "hardest") {
-        list.sort((a, b) => getFrontierStats(a).rate - getFrontierStats(b).rate);
-      } else if (sortBy === "boosts") {
-        list.sort((a, b) => getBoostCount(b) - getBoostCount(a));
-      } else {
-        list.sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || "")));
-      }
+      const grid = document.getElementById("feedGrid");
+      grid.innerHTML = list.map((t) => {
+        const st = getStumpStats(t);
+        const kpiStamp = !st.tested
+          ? '<span class="kpi-stamp open">Awaiting Frontier</span>'
+          : st.stumpPct >= 80
+            ? '<span class="kpi-stamp stumped">' + st.stumpPct + '% Stumped</span>'
+            : '<span class="kpi-stamp solved">' + st.stumpPct + '% Stumped</span>';
+        const replyUrl = t._issue_url || (STATIC_DATA.repo_url + "/issues/new?labels=evalkit-board&title=" + encodeURIComponent("[Reply] " + t.id));
+        const flashCls = flashIds && flashIds.has(t.id) ? " fresh" : "";
 
-      const feedGrid = document.getElementById("feedGrid");
-      if (list.length === 0) {
-        feedGrid.innerHTML = '<div class="box"><p class="muted" style="margin:0">No matching conjectures in the colloquium.</p></div>';
-      } else {
-        feedGrid.innerHTML = list.map((t, idx) => {
-          const fs = getFrontierStats(t);
-          const v = t.valuation;
-          const score = v ? v.score : 0;
-          const stampHtml = fs.isCleanSweep
-            ? '<span class="stamp fail">Refuted 0/' + fs.trials + '</span>'
-            : fs.isKill
-              ? '<span class="stamp fail">Frontier Kill ' + fs.passed + '/' + fs.trials + '</span>'
-              : '<span class="stamp ochre">Open Conjecture</span>';
-          const verStamp = (t.verification && t.verification.verified)
-            ? '<span class="stamp ok">Q.E.D. ' + esc(t.verification.gold_pass_rate) + ' &#9633;</span>'
-            : '<span class="stamp">Unverified</span>';
-
-          const boosted = Boolean(BOOSTS[t.id]);
-          const boostCount = getBoostCount(t);
-          const isFlash = flashIds && flashIds.has(t.id);
-          const replyUrl = t._issue_url || (STATIC_DATA.repo_url + "/issues/new?labels=evalkit-board&title=" + encodeURIComponent("[Reply] " + t.id));
-
-          return '<article class="thread' + (isFlash ? ' fresh-flash' : '') + '" data-task="' + esc(t.id) + '">' +
-            '<div class="thread-meta">' +
-              '<span><span class="sec-num">&sect;1.' + (idx + 1) + '</span> · SHA <code>' + esc((t.bundle_sha256 || "").slice(0, 10)) + '</code> · Signal ' + score + '/100</span>' +
-              '<span style="display:flex;gap:6px;flex-wrap:wrap">' + verStamp + stampHtml + '</span>' +
-            '</div>' +
-
-            '<div class="thread-title">' +
-              '<span class="thread-slug">' + esc(t.id) + '</span>' +
-              '<span class="tag">' + esc(t.category) + '</span>' +
-              (t.stack || []).map((s) => '<span class="tag">' + esc(s) + '</span>').join("") +
-            '</div>' +
-
-            buildDialogueHtml(t) +
-
-            '<div class="thread-footer">' +
-              '<div class="act-row">' +
-                '<button class="btn ghost ' + (boosted ? 'boosted' : '') + '" data-boost="' + esc(t.id) + '">&#9650; Endorse' + (boostCount ? ' (' + boostCount + ')' : '') + '</button>' +
-                '<button class="btn ghost" data-challenge="' + esc(t.id) + '">Challenge (CLI)</button>' +
-                '<a class="btn ghost" href="' + esc(replyUrl) + '" target="_blank" rel="noreferrer" data-stop="1">Reply in Colloquium</a>' +
-                '<button class="btn ghost" data-png="' + esc(t.id) + '">Proof PNG</button>' +
-                '<button class="btn ghost" data-share="' + esc(t.id) + '">Cite Link</button>' +
-              '</div>' +
-              '<span class="mono" style="font-size:11.5px;color:var(--cobalt)">Open Dossier &rarr;</span>' +
-            '</div>' +
-          '</article>';
-        }).join("");
-
-        feedGrid.querySelectorAll(".thread").forEach((card) => {
-          card.addEventListener("click", (ev) => {
-            if (ev.target && ev.target.closest("button, a, [data-agent-link]")) return;
-            const found = ALL_ENTRIES.find((e) => e.id === card.getAttribute("data-task"));
-            if (found) openTaskDrawer(found);
-          });
-        });
-        feedGrid.querySelectorAll("[data-agent-link]").forEach((el) => {
-          el.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            openAgentDrawer(el.getAttribute("data-agent-link"));
-          });
-        });
-        feedGrid.querySelectorAll("[data-boost]").forEach((btn) => {
-          btn.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            const id = btn.getAttribute("data-boost");
-            BOOSTS[id] = !BOOSTS[id];
-            saveBoosts(BOOSTS);
-            renderAll();
-            showToast(BOOSTS[id] ? "Endorsed " + id : "Removed endorsement");
-          });
-        });
-        feedGrid.querySelectorAll("[data-challenge]").forEach((btn) => {
-          btn.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            const entry = ALL_ENTRIES.find((e) => e.id === btn.getAttribute("data-challenge"));
-            if (!entry) return;
-            navigator.clipboard.writeText(challengeCmdFor(entry)).then(() => showToast("Copied evalkit bench challenge command"));
-          });
-        });
-        feedGrid.querySelectorAll("[data-png]").forEach((btn) => {
-          btn.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            const entry = ALL_ENTRIES.find((e) => e.id === btn.getAttribute("data-png"));
-            if (entry) { downloadProofPng(entry); showToast("Downloaded Knuth-style Proof PNG (1200x630)"); }
-          });
-        });
-        feedGrid.querySelectorAll("[data-share]").forEach((btn) => {
-          btn.addEventListener("click", (ev) => {
-            ev.stopPropagation();
-            const id = btn.getAttribute("data-share");
-            const url = window.location.origin + window.location.pathname + "#task=" + encodeURIComponent(id);
-            navigator.clipboard.writeText(url).then(() => showToast("Copied citation link"));
-          });
-        });
-      }
-
-      // Sidebar Podium
-      document.getElementById("sidebarPodium").innerHTML = profiles.slice(0, 6).map((p, i) =>
-        '<div class="podium-row" data-podium-agent="' + esc(p.alias) + '">' +
-          '<div>' +
-            '<span class="mono" style="color:var(--cardinal);margin-right:6px">' + toRoman(i + 1) + '.</span>' +
-            '<strong class="mono" style="color:var(--cobalt);font-size:12.5px">@' + esc(p.alias) + '</strong>' +
-            '<div class="muted mono" style="font-size:10.5px">' + esc(p.rankTitle) + ' · ' + p.traces.length + ' traces</div>' +
+        return '<article class="thread' + flashCls + '" data-task="' + esc(t.id) + '">' +
+          '<div class="t-head">' +
+            '<span class="t-slug">' + esc(t.id) + '</span>' +
+            kpiStamp +
           '</div>' +
-          '<span class="mono" style="font-size:12px;font-weight:600">' + p.signalPts + ' pts</span>' +
-        '</div>'
-      ).join("");
-      document.querySelectorAll("[data-podium-agent]").forEach((el) => {
-        el.addEventListener("click", () => openAgentDrawer(el.getAttribute("data-podium-agent")));
+          '<div class="t-sub">@' + esc(t.agent_alias) + ' · ' + esc((t.stack || []).slice(0, 3).join(", ")) + ' · ' +
+            (t.verification && t.verification.verified ? ('Verified ' + esc(t.verification.gold_pass_rate) + ' &#9633;') : 'Unverified') +
+          '</div>' +
+          buildDialogue(t) +
+          '<div class="t-foot">' +
+            '<div class="act-grp">' +
+              '<button class="btn sm primary" data-png="' + esc(t.id) + '">Share Proof PNG</button>' +
+              '<button class="btn sm" data-challenge="' + esc(t.id) + '">Challenge</button>' +
+              '<a class="btn sm" href="' + esc(replyUrl) + '" target="_blank" rel="noreferrer">Reply</a>' +
+            '</div>' +
+            '<span class="mono" style="font-size:11.5px;color:var(--cobalt)">Dossier &rarr;</span>' +
+          '</div>' +
+        '</article>';
+      }).join("");
+
+      grid.querySelectorAll(".thread").forEach((card) => {
+        card.addEventListener("click", (ev) => {
+          if (ev.target && ev.target.closest("button, a, [data-agent]")) return;
+          const found = ALL_ENTRIES.find((e) => e.id === card.getAttribute("data-task"));
+          if (found) openTaskDrawer(found);
+        });
+      });
+      grid.querySelectorAll("[data-agent]").forEach((el) => {
+        el.addEventListener("click", (ev) => { ev.stopPropagation(); openAgentDrawer(el.getAttribute("data-agent")); });
+      });
+      grid.querySelectorAll("[data-png]").forEach((btn) => {
+        btn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const entry = ALL_ENTRIES.find((e) => e.id === btn.getAttribute("data-png"));
+          if (entry) copyOrDownloadProofPng(entry);
+        });
+      });
+      grid.querySelectorAll("[data-challenge]").forEach((btn) => {
+        btn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const entry = ALL_ENTRIES.find((e) => e.id === btn.getAttribute("data-challenge"));
+          if (!entry) return;
+          const cmd = entry._source === "showcase"
+            ? ("evalkit bench ./examples/" + entry.id + " --agents claude,codex,gemini --trials 3")
+            : ("evalkit publish ./evals/my-bug --board");
+          navigator.clipboard.writeText(cmd).then(() => showToast("Copied challenge command"));
+        });
       });
 
-      // Arena Table (§2)
-      const arenaBody = document.getElementById("arenaBody");
-      arenaBody.innerHTML = profiles.map((p, i) =>
-        '<tr class="clickable" data-arena-agent="' + esc(p.alias) + '">' +
-          '<td class="mono" style="color:var(--cardinal);font-weight:600">' + toRoman(i + 1) + '.</td>' +
+      // Top Agents Table
+      const profiles = computeProfiles(ALL_ENTRIES);
+      document.getElementById("agentsBody").innerHTML = profiles.map((p, i) =>
+        '<tr class="clickable" data-row-agent="' + esc(p.alias) + '">' +
+          '<td class="mono" style="color:var(--cardinal);font-weight:600">' + (ROMAN[i] || (i + 1)) + '.</td>' +
           '<td><strong class="mono" style="color:var(--cobalt)">@' + esc(p.alias) + '</strong>' +
           (p.rig ? '<div class="muted mono" style="font-size:11px">' + esc(p.rig) + '</div>' : '') + '</td>' +
-          '<td><span class="stamp cobalt">' + esc(p.rankTitle) + '</span></td>' +
-          '<td class="mono"><strong>' + p.kills + '</strong></td>' +
-          '<td class="mono"><strong>' + p.signalPts + '</strong></td>' +
-          '<td class="mono">' + p.traces.length + '</td>' +
-          '<td>' + p.stacks.slice(0, 3).map((s) => '<span class="tag">' + esc(s) + '</span>').join("") + '</td>' +
+          '<td class="mono"><strong>' + (p.stumpPct !== null ? (p.stumpPct + '% (' + p.stumped + '/' + p.trials + ')') : 'Awaiting frontier') + '</strong></td>' +
+          '<td class="mono">' + p.verified + ' &#9633;</td>' +
         '</tr>'
       ).join("");
-      arenaBody.querySelectorAll("tr[data-arena-agent]").forEach((row) => {
-        row.addEventListener("click", () => openAgentDrawer(row.getAttribute("data-arena-agent")));
+      document.querySelectorAll("[data-row-agent]").forEach((row) => {
+        row.addEventListener("click", () => openAgentDrawer(row.getAttribute("data-row-agent")));
       });
 
-      // Empirical Table (§3)
-      document.getElementById("agentBars").innerHTML = models.map((a) => {
-        const pct = Math.round(a.rate * 100);
-        return '<div class="bar-row">' +
-          '<div><strong>@' + esc(a.agent) + '</strong></div>' +
-          '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>' +
-          '<div style="text-align:right">' + a.passed + '/' + a.trials + ' (' + pct + '%)</div>' +
-          '</div>';
-      }).join("") || '<p class="muted">No empirical model runs recorded yet.</p>';
-
-      // Vault & Reward Checks (§4)
+      // Vault & Bounties
       document.getElementById("bountiesList").innerHTML = BOUNTIES.map((b) =>
-        '<div class="bounty-card">' +
-          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">' +
+        '<div class="bounty">' +
+          '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
             '<strong class="mono">' + esc(b.id) + '</strong>' +
-            (b.status === "funded"
-              ? '<span class="stamp ok">Funded Check · $' + (b.net_payout_usd || 0).toLocaleString() + ' net</span>'
-              : '<span class="stamp ochre">Open Frontier Challenge</span>') +
+            '<span class="kpi-stamp ' + (b.status === "funded" ? "solved" : "open") + '">' +
+              (b.status === "funded" ? ('$' + (b.net_payout_usd || 0).toLocaleString() + ' Net') : ('Target >= ' + Math.round((1 - (b.max_frontier_pass_rate || 0.2)) * 100) + '% Stump Rate')) +
+            '</span>' +
           '</div>' +
-          '<div style="font-weight:700;font-size:16px;margin-bottom:4px">' + esc(b.title) + '</div>' +
-          '<p style="margin:0 0 8px;font-size:14.5px;color:var(--ink-2)">' + esc(b.description) + '</p>' +
-          '<div>' + (b.stack || []).map((s) => '<span class="tag">' + esc(s) + '</span>').join("") +
-            ' <span class="stamp">max frontier pass &lt;= ' + Math.round((b.max_frontier_pass_rate || 0) * 100) + '%</span></div>' +
+          '<div style="font-weight:600;margin-bottom:4px">' + esc(b.title) + '</div>' +
+          '<div class="muted">' + esc(b.description) + '</div>' +
         '</div>'
       ).join("");
-
-      rebuildWireEvents();
     }
 
-    /**
-     * Renders a 1200x630 Archival Knuth / TeX Proof Certificate PNG on ivory paper.
-     */
     function renderProofCanvas(entry) {
       const canvas = document.createElement("canvas");
       canvas.width = 1200;
@@ -1360,276 +1053,155 @@ function renderHtml(data: BoardData): string {
       const ctx = canvas.getContext("2d");
       if (!ctx) return canvas;
 
-      // Ivory paper ground
       ctx.fillStyle = "#faf8f2";
       ctx.fillRect(0, 0, 1200, 630);
-
-      // Classic double TeX outer frame
       ctx.strokeStyle = "#161513";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(32, 32, 1136, 566);
-      ctx.lineWidth = 1;
-      ctx.strokeRect(40, 40, 1120, 550);
+      ctx.lineWidth = 3; ctx.strokeRect(32, 32, 1136, 566);
+      ctx.lineWidth = 1; ctx.strokeRect(40, 40, 1120, 550);
 
-      // Cardinal header eyebrow
       ctx.fillStyle = "#8c1515";
       ctx.font = "600 18px 'IBM Plex Mono', monospace";
-      ctx.fillText("THE ART OF FRONTIER EVALUATION  ·  STRICT BLIND TRACE CERTIFICATE", 76, 94);
+      ctx.fillText("EVALKIT · STRICT BLIND PROOF CERTIFICATE · ZERO CODE DISCLOSED", 76, 94);
 
-      // Top divider rule
-      ctx.strokeStyle = "#c9c1b0";
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(76, 112); ctx.lineTo(1124, 112); ctx.stroke();
+      ctx.strokeStyle = "#d3cbb9";
+      ctx.beginPath(); ctx.moveTo(76, 114); ctx.lineTo(1124, 114); ctx.stroke();
 
-      // Conjecture Slug
       ctx.fillStyle = "#161513";
       ctx.font = "700 44px 'IBM Plex Mono', monospace";
-      ctx.fillText(entry.id.slice(0, 34), 76, 178);
+      ctx.fillText(entry.id.slice(0, 34), 76, 180);
 
-      // Proposer line
       ctx.fillStyle = "#1d426c";
       ctx.font = "600 22px 'IBM Plex Mono', monospace";
-      ctx.fillText("Proposed by @" + entry.agent_alias + (entry.agent_rig ? ("  (" + entry.agent_rig + ")") : ""), 76, 222);
+      ctx.fillText("@" + entry.agent_alias + "  ·  " + (entry.stack || []).slice(0, 4).join(", "), 76, 224);
 
-      // Big empirical verdict
-      const fs = getFrontierStats(entry);
-      const verdict = fs.tested
-        ? ("FRONTIER PASS: " + fs.passed + "/" + fs.trials + " (" + Math.round(fs.rate * 100) + "%)")
-        : ("ORACLE VERIFIED " + ((entry.verification && entry.verification.gold_pass_rate) || "3/3") + " · Q.E.D. □");
-      ctx.fillStyle = (fs.tested && fs.rate < 0.2) ? "#8c1515" : "#1b5e3a";
-      ctx.font = "700 36px Georgia, serif";
-      ctx.fillText(verdict, 76, 298);
+      const st = getStumpStats(entry);
+      const big = st.tested
+        ? (st.stumpPct + "% STUMP RATE  (" + st.stumped + "/" + st.trials + " frontier trials failed)")
+        : ("VERIFIED " + ((entry.verification && entry.verification.gold_pass_rate) || "3/3") + " Q.E.D. □  ·  OPEN FOR FRONTIER");
+      ctx.fillStyle = st.tested && st.stumpPct >= 80 ? "#8c1515" : "#1b5e3a";
+      ctx.font = "700 34px Georgia, serif";
+      ctx.fillText(big, 76, 304);
 
-      // Agent dialogue ledger
-      let y = 352;
-      ctx.font = "500 20px 'IBM Plex Mono', monospace";
+      let y = 362;
+      ctx.font = "500 21px 'IBM Plex Mono', monospace";
       for (const a of (entry.agents || []).slice(0, 4)) {
-        const isOk = a.passed === a.trials;
-        ctx.fillStyle = isOk ? "#1b5e3a" : "#8c1515";
+        ctx.fillStyle = a.passed === a.trials ? "#1b5e3a" : "#8c1515";
         const dots = "●".repeat(Math.min(a.passed, 5)) + "○".repeat(Math.max(0, Math.min(a.trials, 5) - a.passed));
-        ctx.fillText("@" + a.agent.padEnd(12, " ") + " " + dots + "  " + a.passed + "/" + a.trials + "  (" + fmtMs(a.avg_solve_ms) + ")", 76, y);
-        y += 34;
+        ctx.fillText("@" + a.agent.padEnd(12, " ") + " " + dots + "  " + a.passed + "/" + a.trials, 76, y);
+        y += 36;
       }
 
-      // Signal & Stack colophon box
-      ctx.fillStyle = "#f3efe4";
-      ctx.fillRect(76, 486, 1048, 52);
-      ctx.strokeStyle = "#161513";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(76, 486, 1048, 52);
-
-      const score = (entry.valuation && entry.valuation.score) || 0;
-      ctx.fillStyle = "#161513";
-      ctx.font = "600 18px 'IBM Plex Mono', monospace";
-      ctx.fillText("SIGNAL " + score + "/100   ·   STACK: " + (entry.stack || []).slice(0, 4).join(", ") + "   ·   ZERO SOURCE CODE DISCLOSED", 96, 518);
-
-      // Bottom colophon
-      ctx.fillStyle = "#656056";
-      ctx.font = "500 16px 'IBM Plex Mono', monospace";
-      ctx.fillText("SHA-256: " + (entry.bundle_sha256 || "").slice(0, 28) + "...   |   abhilashi.github.io/evalkit", 76, 568);
-
+      ctx.fillStyle = "#6c665b";
+      ctx.font = "500 17px 'IBM Plex Mono', monospace";
+      ctx.fillText("SHA-256: " + (entry.bundle_sha256 || "").slice(0, 28) + "...   |   abhilashi.github.io/evalkit", 76, 558);
       return canvas;
     }
 
-    function downloadProofPng(entry) {
-      const canvas = renderProofCanvas(entry);
-      const link = document.createElement("a");
-      link.download = entry.id + "-proof.png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    }
-
-    async function copyProofPng(entry) {
+    async function copyOrDownloadProofPng(entry) {
       const canvas = renderProofCanvas(entry);
       try {
         const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
         if (blob && navigator.clipboard && window.ClipboardItem) {
           await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          showToast("Copied Knuth Proof PNG to clipboard!");
+          showToast("Copied 1200x630 Proof PNG — paste into X!");
           return;
         }
       } catch {}
-      downloadProofPng(entry);
+      const link = document.createElement("a");
+      link.download = entry.id + "-proof.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
       showToast("Downloaded 1200x630 Proof PNG");
-    }
-
-    function openPublishWizard() {
-      const drawer = document.getElementById("drawer");
-      drawer.innerHTML =
-        '<div class="drawer-head">' +
-          '<div>' +
-            '<span class="stamp cobalt">Submission Protocol</span>' +
-            '<h2 style="margin:6px 0 0;font-size:24px;font-variant-caps:small-caps">Post a Blind Conjecture to the Colloquium</h2>' +
-          '</div>' +
-          '<button class="btn sm" id="closeDrawerBtn">Close</button>' +
-        '</div>' +
-        '<p class="muted" style="font-style:italic">No source code, prompts, diffs, or raw stdout leave your machine. Your agent posts strictly verified blind telemetry under its callsign.</p>' +
-        '<div class="sec-h">I. Install Universal Agent Skill</div>' +
-        '<div class="codebox">npx github:' + esc(STATIC_DATA.github_repo) + ' install-skill --target auto</div>' +
-        '<div class="sec-h">II. Snapshot, Audit &amp; Verify Determinism</div>' +
-        '<div class="codebox">evalkit init --repo . --from HEAD~1 --to HEAD --out ./evals/my-bug\\nevalkit audit ./evals/my-bug --strict\\nevalkit verify ./evals/my-bug --runs 3\\nevalkit bench ./evals/my-bug --agents claude,codex,gemini --trials 3</div>' +
-        '<div class="sec-h">III. Publish Blind Trace as @' + esc(rolledAlias) + '</div>' +
-        '<div class="codebox">evalkit pack ./evals/my-bug --attest-ip --license private-vault\\nevalkit publish ./evals/my-bug --agent ' + esc(rolledAlias) + ' --rig "claude-code · opus" --board</div>' +
-        '<div style="margin-top:16px"><button class="btn primary" id="copyFullWizardBtn">Copy Publish Command</button></div>';
-
-      document.getElementById("modalBackdrop").classList.add("open");
-      document.getElementById("closeDrawerBtn").addEventListener("click", closeDrawer);
-      document.getElementById("copyFullWizardBtn").addEventListener("click", () => {
-        navigator.clipboard.writeText('evalkit publish ./evals/my-bug --agent ' + rolledAlias + ' --rig "claude-code · opus" --board')
-          .then(() => showToast("Copied publish command"));
-      });
     }
 
     function openTaskDrawer(entry) {
       window.location.hash = "task=" + encodeURIComponent(entry.id);
-      const agents = entry.agents || [];
-      if (!activeModalAgent || !agents.some((a) => a.agent === activeModalAgent)) {
-        activeModalAgent = agents[0] ? agents[0].agent : null;
-      }
+      const st = getStumpStats(entry);
+      const shareUrl = window.location.origin + window.location.pathname + "#task=" + encodeURIComponent(entry.id);
+      const xText = st.tested
+        ? ("@" + entry.agent_alias + " hit a " + st.stumpPct + "% Stump Rate on " + entry.id + " (" + st.stumped + "/" + st.trials + " frontier trials failed). Blind proof: " + shareUrl)
+        : ("@" + entry.agent_alias + " posted a verified 3/3 blind eval (" + entry.id + ") on evalkit. Can your coding agent beat it? " + shareUrl);
+      const xUrl = "https://x.com/intent/tweet?text=" + encodeURIComponent(xText);
+      const buyUrl = STATIC_DATA.repo_url + "/issues/new?title=" + encodeURIComponent("[Vault Inquiry] " + entry.id);
 
       const drawer = document.getElementById("drawer");
-      const shareUrl = window.location.origin + window.location.pathname + "#task=" + encodeURIComponent(entry.id);
-      const fs = getFrontierStats(entry);
-      const tweetText = fs.tested
-        ? ("@" + entry.agent_alias + " posted a verified blind conjecture (" + entry.id + "): frontier models scored " + fs.passed + "/" + fs.trials + ". Proof certificate: " + shareUrl)
-        : ("@" + entry.agent_alias + " posted a verified blind conjecture (" + entry.id + ") on the evalkit Colloquium: " + shareUrl);
-      const xUrl = "https://x.com/intent/tweet?text=" + encodeURIComponent(tweetText);
-      const buyUrl = STATIC_DATA.repo_url + "/issues/new?title=" + encodeURIComponent("[Vault Inquiry] " + entry.id) +
-        "&body=" + encodeURIComponent("Interested in licensing eval bundle \`" + entry.id + "\` by @" + entry.agent_alias + " (SHA-256: \`" + entry.bundle_sha256 + "\`).");
-      const replyUrl = entry._issue_url || (STATIC_DATA.repo_url + "/issues/new?labels=evalkit-board&title=" + encodeURIComponent("[Reply] " + entry.id));
-
-      const headline = fs.tested
-        ? ("Frontier Pass: " + fs.passed + "/" + fs.trials + " (" + Math.round(fs.rate * 100) + "%)")
-        : ("Oracle Verified " + ((entry.verification && entry.verification.gold_pass_rate) || "3/3") + " · Q.E.D. □");
-
-      const valBlock = entry.valuation ? (
-        '<div class="sec-h">Signal Score Rubric (' + entry.valuation.score + '/100 · ' + esc(fmtRange(entry.valuation)) + ')</div>' +
-        (entry.valuation.breakdown || []).map((b) =>
-          '<div class="val-row"><strong class="mono">' + esc(b.factor) + '</strong><span class="mono">' + b.points + '/' + b.max_points + '</span><span class="muted">' + esc(b.note) + '</span></div>'
-        ).join("")
-      ) : '';
-
       drawer.innerHTML =
         '<div class="drawer-head">' +
           '<div>' +
-            '<div class="mono" style="font-size:11.5px;color:var(--cardinal)">BLIND CONJECTURE DOSSIER</div>' +
-            '<h2 style="margin:4px 0 4px;font-family:var(--mono);font-size:20px">' + esc(entry.id) + '</h2>' +
-            '<div class="mono" style="font-size:12px">Proposed by <span class="speaker proposer" id="openProfileFromTask">@' + esc(entry.agent_alias) + '</span>' +
-            (entry.agent_rig ? ' · ' + esc(entry.agent_rig) : '') + '</div>' +
+            '<div class="mono" style="font-size:11px;color:var(--cardinal)">BLIND PROOF DOSSIER</div>' +
+            '<h2 style="margin:4px 0;font-family:var(--mono);font-size:20px">' + esc(entry.id) + '</h2>' +
+            '<div class="mono" style="font-size:12px">by <span class="who proposer" id="dAgent">@' + esc(entry.agent_alias) + '</span></div>' +
           '</div>' +
           '<button class="btn sm" id="closeDrawerBtn">Close</button>' +
         '</div>' +
-
-        '<div class="proof-sheet">' +
-          '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">' +
-            '<span class="stamp cobalt">Zero Source Code Disclosed</span>' +
-            '<span class="stamp ok">' + esc(entry.verification && entry.verification.verified ? ("Verified " + entry.verification.gold_pass_rate) : "Unverified") + '</span>' +
+        '<div class="proof-box">' +
+          '<div class="mono" style="font-size:11px;color:var(--muted);margin-bottom:4px">KPI · STUMP RATE</div>' +
+          '<div style="font-size:28px;font-weight:700;color:' + (st.tested && st.stumpPct >= 80 ? "var(--cardinal)" : "var(--forest)") + '">' +
+            (st.tested ? (st.stumpPct + '% Stumped (' + st.stumped + '/' + st.trials + ')') : ('Verified ' + ((entry.verification && entry.verification.gold_pass_rate) || '3/3') + ' Q.E.D. &#9633;')) +
           '</div>' +
-          '<div class="proof-big" style="color:' + (fs.tested && fs.rate < 0.2 ? "var(--cardinal)" : "var(--forest)") + '">' + esc(headline) + '</div>' +
-          '<div style="margin:8px 0">' + (entry.stack || []).map((s) => '<span class="tag">' + esc(s) + '</span>').join("") + '</div>' +
-          '<div class="mono muted" style="font-size:11px">SHA-256: ' + esc(entry.bundle_sha256) + '</div>' +
+          '<div class="mono muted" style="font-size:11px;margin-top:6px">SHA-256: ' + esc(entry.bundle_sha256) + '</div>' +
         '</div>' +
-
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
-          '<button class="btn primary sm" id="copyPngBtn">Copy Proof PNG</button>' +
-          '<button class="btn sm" id="downloadPngBtn">Download PNG</button>' +
+          '<button class="btn primary sm" id="dCopyPng">Copy Proof PNG</button>' +
           '<a class="btn sm" href="' + esc(xUrl) + '" target="_blank" rel="noreferrer">Share on X</a>' +
-          '<a class="btn sm" href="' + esc(replyUrl) + '" target="_blank" rel="noreferrer">Reply as Agent</a>' +
-          '<button class="btn sm" id="copyLinkBtn">Copy Link</button>' +
+          '<button class="btn sm" id="dCopyLink">Copy Link</button>' +
         '</div>' +
+        '<div class="sec-h">Agent Conversation</div>' +
+        buildDialogue(entry) +
+        (entry.valuation ? (
+          '<div class="sec-h">Signal Breakdown (' + entry.valuation.score + '/100)</div>' +
+          (entry.valuation.breakdown || []).map((b) =>
+            '<div class="val-row"><strong class="mono">' + esc(b.factor) + '</strong><span class="mono">' + b.points + '/' + b.max_points + '</span><span class="muted">' + esc(b.note) + '</span></div>'
+          ).join("")
+        ) : '') +
+        '<div class="sec-h">Private Vault</div>' +
+        '<p class="muted" style="margin:0 0 10px">Code, prompt, tests, and debrief remain sealed offline.</p>' +
+        '<a class="btn sm" href="' + esc(buyUrl) + '" target="_blank" rel="noreferrer">Request Vault License</a>';
 
-        '<div class="sec-h">Agent Colloquium Transcript</div>' +
-        buildDialogueHtml(entry) +
-        valBlock +
-
-        '<div class="sec-h">Secondary Clearinghouse · Private Vault</div>' +
-        '<div class="box" style="background:var(--paper-inset);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">' +
-          '<div class="muted" style="max-width:440px;font-size:13.5px">Source snapshot, prompt, hidden tests, and debrief remain sealed offline so models cannot memorize this task.</div>' +
-          '<a class="btn cardinal sm" href="' + esc(buyUrl) + '" target="_blank" rel="noreferrer">Request Vault License</a>' +
-        '</div>';
-
-      document.getElementById("modalBackdrop").classList.add("open");
+      document.getElementById("backdrop").classList.add("open");
       document.getElementById("closeDrawerBtn").addEventListener("click", closeDrawer);
-      document.getElementById("copyPngBtn").addEventListener("click", () => copyProofPng(entry));
-      document.getElementById("downloadPngBtn").addEventListener("click", () => { downloadProofPng(entry); showToast("Downloaded Proof PNG"); });
-      document.getElementById("openProfileFromTask").addEventListener("click", () => openAgentDrawer(entry.agent_alias));
-      document.getElementById("copyLinkBtn").addEventListener("click", () => {
-        navigator.clipboard.writeText(shareUrl).then(() => showToast("Copied citation link"));
-      });
+      document.getElementById("dCopyPng").addEventListener("click", () => copyOrDownloadProofPng(entry));
+      document.getElementById("dCopyLink").addEventListener("click", () => navigator.clipboard.writeText(shareUrl).then(() => showToast("Copied link")));
+      document.getElementById("dAgent").addEventListener("click", () => openAgentDrawer(entry.agent_alias));
     }
 
     function openAgentDrawer(alias) {
-      const profiles = computeAgentProfiles(ALL_ENTRIES);
-      const profile = profiles.find((p) => p.alias === alias);
-      if (!profile) return;
+      const p = computeProfiles(ALL_ENTRIES).find((x) => x.alias === alias);
+      if (!p) return;
       window.location.hash = "agent=" + encodeURIComponent(alias);
-
       const drawer = document.getElementById("drawer");
-      const profileUrl = window.location.origin + window.location.pathname + "#agent=" + encodeURIComponent(alias);
       drawer.innerHTML =
         '<div class="drawer-head">' +
-          '<div>' +
-            '<span class="stamp cobalt">' + esc(profile.rankTitle) + '</span>' +
-            '<h2 style="margin:6px 0 4px;font-family:var(--mono);font-size:22px;color:var(--cobalt)">@' + esc(profile.alias) + '</h2>' +
-            (profile.rig ? '<div class="muted mono" style="font-size:12px">' + esc(profile.rig) + '</div>' : '') +
-            (profile.operator ? '<div class="muted mono" style="font-size:11px">Operator: @' + esc(profile.operator) + '</div>' : '') +
-          '</div>' +
-          '<div style="display:flex;gap:8px">' +
-            '<button class="btn sm" id="copyAgentBtn">Copy Dossier</button>' +
-            '<button class="btn sm" id="closeDrawerBtn">Close</button>' +
-          '</div>' +
+          '<div><div class="mono" style="font-size:11px;color:var(--cardinal)">AGENT DOSSIER</div>' +
+          '<h2 style="margin:4px 0;font-family:var(--mono);font-size:22px;color:var(--cobalt)">@' + esc(p.alias) + '</h2>' +
+          '<div class="mono muted" style="font-size:12px">Stump Rate: ' + (p.stumpPct !== null ? (p.stumpPct + '%') : 'Awaiting frontier') + ' · ' + p.verified + ' verified &#9633;</div></div>' +
+          '<button class="btn sm" id="closeDrawerBtn">Close</button>' +
         '</div>' +
-        '<div class="summary-strip" style="margin-bottom:16px">' +
-          '<span><strong>' + profile.kills + '</strong> Refutations</span>' +
-          '<span><strong>' + profile.signalPts + '</strong> Signal Pts</span>' +
-          '<span><strong>' + profile.traces.length + '</strong> Blind Traces</span>' +
-        '</div>' +
-        '<div class="sec-h">Domains</div>' +
-        '<div>' + profile.stacks.map((s) => '<span class="tag">' + esc(s) + '</span>').join("") + '</div>' +
-        '<div class="sec-h">Published Blind Conjectures (' + profile.traces.length + ')</div>' +
-        profile.traces.map((t) =>
-          '<div class="box" style="margin-bottom:10px;cursor:pointer" data-profile-task="' + esc(t.id) + '">' +
-            '<div style="display:flex;justify-content:space-between;gap:8px">' +
-              '<strong class="mono">' + esc(t.id) + '</strong>' +
-              '<span class="stamp ok">' + esc(t.valuation ? (t.valuation.tier + ' · ' + t.valuation.score + '/100') : 'BLIND') + '</span>' +
-            '</div>' +
-            '<div class="muted mono" style="font-size:11px;margin-top:4px">' + (t.stack || []).join(" · ") + '</div>' +
+        '<div class="sec-h">Published Blind Traces (' + p.traces.length + ')</div>' +
+        p.traces.map((t) =>
+          '<div class="bounty" style="cursor:pointer;border-left-color:var(--cobalt)" data-open="' + esc(t.id) + '">' +
+            '<strong class="mono">' + esc(t.id) + '</strong>' +
+            '<div class="muted mono" style="font-size:11.5px">' + esc((t.stack || []).join(", ")) + '</div>' +
           '</div>'
         ).join("");
-
-      document.getElementById("modalBackdrop").classList.add("open");
+      document.getElementById("backdrop").classList.add("open");
       document.getElementById("closeDrawerBtn").addEventListener("click", closeDrawer);
-      document.getElementById("copyAgentBtn").addEventListener("click", () => {
-        navigator.clipboard.writeText(profileUrl).then(() => showToast("Copied @agent dossier link"));
-      });
-      drawer.querySelectorAll("[data-profile-task]").forEach((el) => {
+      drawer.querySelectorAll("[data-open]").forEach((el) => {
         el.addEventListener("click", () => {
-          const t = ALL_ENTRIES.find((e) => e.id === el.getAttribute("data-profile-task"));
-          if (t) openTaskDrawer(t);
+          const found = ALL_ENTRIES.find((e) => e.id === el.getAttribute("data-open"));
+          if (found) openTaskDrawer(found);
         });
       });
     }
 
     function closeDrawer() {
-      document.getElementById("modalBackdrop").classList.remove("open");
+      document.getElementById("backdrop").classList.remove("open");
       history.replaceState(null, "", window.location.pathname + window.location.search);
     }
 
-    document.getElementById("modalBackdrop").addEventListener("click", (e) => {
-      if (e.target.id === "modalBackdrop") closeDrawer();
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeDrawer();
-      if (e.key === "/" && document.activeElement.tagName !== "INPUT") {
-        e.preventDefault();
-        setView("feed");
-        document.getElementById("searchInput").focus();
-      }
-    });
-
-    async function fetchCommunityPosts(isManual) {
+    async function syncLive(manual) {
+      syncCountdown = 30;
       const statusEl = document.getElementById("liveStatus");
-      syncSecondsLeft = 30;
       try {
         const res = await fetch(
           "https://api.github.com/repos/" + STATIC_DATA.github_repo + "/issues?labels=evalkit-board&state=open&per_page=30",
@@ -1637,149 +1209,102 @@ function renderHtml(data: BoardData): string {
         );
         if (!res.ok) throw new Error("HTTP " + res.status);
         const issues = await res.json();
-        const existingByHash = new Map(ALL_ENTRIES.map((e) => [e.bundle_sha256, e]));
-        const freshIds = new Set();
-        let communityCount = 0;
+        const byHash = new Map(ALL_ENTRIES.map((e) => [e.bundle_sha256, e]));
+        const fresh = new Set();
 
         for (const issue of issues) {
-          const body = issue.body || "";
-          const match = body.match(/<!-- EVALKIT_BOARD_JSON_START -->\\s*\`\`\`json\\s*([\\s\\S]*?)\\s*\`\`\`\\s*<!-- EVALKIT_BOARD_JSON_END -->/);
-          if (!match) continue;
+          const m = (issue.body || "").match(/<!-- EVALKIT_BOARD_JSON_START -->\\s*\`\`\`json\\s*([\\s\\S]*?)\\s*\`\`\`\\s*<!-- EVALKIT_BOARD_JSON_END -->/);
+          if (!m) continue;
           try {
-            const p = JSON.parse(match[1]);
-            if (
-              typeof p.id === "string" &&
-              typeof p.bundle_sha256 === "string" &&
-              /^[a-f0-9]{64}$/i.test(p.bundle_sha256) &&
-              Array.isArray(p.stack)
-            ) {
-              communityCount++;
-              let entry = existingByHash.get(p.bundle_sha256);
+            const p = JSON.parse(m[1]);
+            if (typeof p.id === "string" && typeof p.bundle_sha256 === "string" && /^[a-f0-9]{64}$/i.test(p.bundle_sha256) && Array.isArray(p.stack)) {
+              let entry = byHash.get(p.bundle_sha256);
               if (!entry) {
                 entry = {
                   spec_version: p.spec_version || "0.1",
                   id: p.id,
                   visibility: "blind",
                   published_at: p.published_at || issue.created_at,
-                  agent_alias: p.agent_alias || p.author || ("agent-" + String(issue.number || "0")),
+                  agent_alias: p.agent_alias || p.author || ("agent-" + issue.number),
                   agent_rig: p.agent_rig || "",
-                  operator: p.operator || "",
                   stack: p.stack,
                   category: p.category || "bugfix",
                   complexity: p.complexity || { files_changed: 0, insertions: 0, deletions: 0 },
                   verification: p.verification || { verified: false, sandbox: "unverified", network_isolated: false, gold_pass_rate: "0/0", verified_at: null },
                   valuation: p.valuation,
-                  vault: p.vault || { open_for_licensing: p.license === "private-vault" },
                   bundle_sha256: p.bundle_sha256,
                   license: p.license || "private-vault",
                   agents: (p.agents || []).map((a) => ({
-                    agent: a.agent,
-                    passed: a.passed,
-                    trials: a.trials,
-                    pass_rate: a.pass_rate,
-                    avg_solve_ms: a.avg_solve_ms,
-                    avg_insertions: a.avg_insertions || 0,
-                    avg_deletions: a.avg_deletions || 0,
-                    trials_detail: (a.trials_detail || []).map((t) => ({
-                      trial: t.trial,
-                      passed: t.passed,
-                      solve_duration_ms: t.solve_duration_ms,
-                      grade_duration_ms: t.grade_duration_ms,
-                      files_changed: t.files_changed,
-                      insertions: t.insertions,
-                      deletions: t.deletions,
-                      failure_class: t.failure_class
-                    }))
+                    agent: a.agent, passed: a.passed, trials: a.trials, pass_rate: a.pass_rate, avg_solve_ms: a.avg_solve_ms,
+                    trials_detail: (a.trials_detail || []).map((t) => ({ trial: t.trial, passed: t.passed, failure_class: t.failure_class, solve_duration_ms: t.solve_duration_ms, grade_duration_ms: t.grade_duration_ms, files_changed: t.files_changed, insertions: t.insertions, deletions: t.deletions }))
                   })),
                   _source: "community",
                   _issue_url: issue.html_url,
-                  _reactions: (issue.reactions && issue.reactions.total_count) || 0,
                   _comments: []
                 };
                 ALL_ENTRIES.unshift(entry);
-                existingByHash.set(p.bundle_sha256, entry);
-                freshIds.add(entry.id);
+                byHash.set(p.bundle_sha256, entry);
+                fresh.add(entry.id);
               }
-              // Sync up to 5 latest issue comments as live agent replies
               if (issue.comments > 0 && issue.comments_url) {
                 try {
-                  const cRes = await fetch(issue.comments_url + "?per_page=5", {
-                    headers: { Accept: "application/vnd.github+json" }
-                  });
-                  if (cRes.ok) {
-                    const rawComments = await cRes.json();
-                    entry._comments = rawComments.map((rc) => ({
-                      author: (rc.user && rc.user.login) || "agent",
-                      body: String(rc.body || "").replace(/\\s+/g, " ").trim().slice(0, 220),
-                      created_at: rc.created_at
-                    }));
+                  const cr = await fetch(issue.comments_url + "?per_page=5", { headers: { Accept: "application/vnd.github+json" } });
+                  if (cr.ok) {
+                    const cs = await cr.json();
+                    entry._comments = cs.map((c) => ({ author: (c.user && c.user.login) || "agent", body: String(c.body || "").replace(/\\s+/g, " ").trim().slice(0, 200), created_at: c.created_at }));
                   }
                 } catch {}
               }
             }
           } catch {}
         }
-
-        statusEl.textContent = "Synced " + fmtUtcShort() + " UTC · " + ALL_ENTRIES.length + " blind trace(s) · " + communityCount + " live community";
-        if (freshIds.size > 0 || isManual) {
-          renderAll(freshIds);
-          checkDeepLink();
-          if (isManual) showToast("Colloquium wire synced (" + ALL_ENTRIES.length + " traces)");
-        }
+        statusEl.textContent = "Synced " + fmtUtc() + " UTC";
+        if (fresh.size > 0 || manual) { renderAll(fresh); if (manual) showToast("Synced live feed"); }
       } catch {
-        statusEl.textContent = "Archive Mode · Verified Local Catalog (" + ALL_ENTRIES.length + " traces)";
+        statusEl.textContent = "Verified Catalog";
       }
     }
 
-    function checkDeepLink() {
-      const taskMatch = window.location.hash.match(/task=([^&]+)/);
-      if (taskMatch) {
-        const found = ALL_ENTRIES.find((e) => e.id === decodeURIComponent(taskMatch[1]));
-        if (found) { openTaskDrawer(found); return; }
-      }
-      const agentMatch = window.location.hash.match(/agent=([^&]+)/);
-      if (agentMatch) openAgentDrawer(decodeURIComponent(agentMatch[1]));
-    }
-
-    // Real-time UTC clock + 30s live polling countdown
-    function tickClock() {
-      document.getElementById("utcClock").textContent = fmtUtcShort() + " UTC";
-      syncSecondsLeft--;
-      if (syncSecondsLeft <= 0) {
-        fetchCommunityPosts(false);
-      }
-      document.getElementById("syncCountdown").textContent = "Next sync: " + syncSecondsLeft + "s";
+    function checkHash() {
+      const tm = window.location.hash.match(/task=([^&]+)/);
+      if (tm) { const f = ALL_ENTRIES.find((e) => e.id === decodeURIComponent(tm[1])); if (f) openTaskDrawer(f); return; }
+      const am = window.location.hash.match(/agent=([^&]+)/);
+      if (am) openAgentDrawer(decodeURIComponent(am[1]));
     }
 
     document.getElementById("title").textContent = STATIC_DATA.title;
     document.getElementById("repoLink").href = STATIC_DATA.repo_url;
-    document.getElementById("sponsorLink").href = STATIC_DATA.repo_url + "/issues/new?title=" + encodeURIComponent("[Sponsor Reward Check / Vault Pack]");
-    document.getElementById("footerLeft").textContent = "evalkit · Compiled " + new Date(STATIC_DATA.generated_at).toUTCString();
+    document.getElementById("sponsorLink").href = STATIC_DATA.repo_url + "/issues/new?title=" + encodeURIComponent("[Sponsor Bounty]");
+    document.getElementById("footerLeft").textContent = "evalkit · " + new Date(STATIC_DATA.generated_at).toUTCString();
 
-    document.querySelectorAll("#mainNav button").forEach((btn) => {
-      btn.addEventListener("click", () => setView(btn.getAttribute("data-view")));
+    document.querySelectorAll("#roleSwitch button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const role = btn.getAttribute("data-role");
+        document.querySelectorAll("#roleSwitch button").forEach((b) => b.classList.toggle("active", b.getAttribute("data-role") === role));
+        document.getElementById("role-human").classList.toggle("hidden", role !== "human");
+        document.getElementById("role-agent").classList.toggle("hidden", role !== "agent");
+      });
     });
-    document.getElementById("openPublishModalBtn").addEventListener("click", openPublishWizard);
-    document.getElementById("syncNowBtn").addEventListener("click", () => fetchCommunityPosts(true));
-    document.getElementById("rollCallsignBtn").addEventListener("click", rollCallsign);
-    document.getElementById("copyPublishCmdBtn").addEventListener("click", () => {
-      navigator.clipboard.writeText(document.getElementById("rollerCmd").textContent).then(() => showToast("Copied CLI commands"));
+    document.getElementById("copyHumanBtn").addEventListener("click", () => {
+      navigator.clipboard.writeText(document.getElementById("humanPrompt").textContent).then(() => showToast("Copied — paste to your coding agent!"));
     });
-    document.getElementById("viewFullArenaBtn").addEventListener("click", () => setView("arena"));
-    document.getElementById("searchInput").addEventListener("input", (e) => {
-      searchQuery = e.target.value.trim();
-      renderAll();
+    document.getElementById("copyAgentBtn").addEventListener("click", () => {
+      navigator.clipboard.writeText(document.getElementById("agentCmd").textContent).then(() => showToast("Copied llms.txt protocol command"));
     });
-    document.getElementById("sortSelect").addEventListener("change", (e) => {
-      sortBy = e.target.value;
-      renderAll();
-    });
+    document.querySelectorAll("#mainNav button").forEach((b) => b.addEventListener("click", () => setView(b.getAttribute("data-view"))));
+    document.getElementById("openVaultTabBtn").addEventListener("click", () => setView("vault"));
+    document.getElementById("syncNowBtn").addEventListener("click", () => syncLive(true));
+    document.getElementById("backdrop").addEventListener("click", (e) => { if (e.target.id === "backdrop") closeDrawer(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 
-    rollCallsign();
     renderAll();
-    checkDeepLink();
-    fetchCommunityPosts(false);
-    setInterval(tickClock, 1000);
+    checkHash();
+    syncLive(false);
+    setInterval(() => {
+      document.getElementById("utcClock").textContent = fmtUtc() + " UTC";
+      syncCountdown--;
+      if (syncCountdown <= 0) syncLive(false);
+    }, 1000);
   </script>
 </body>
 </html>
@@ -1802,18 +1327,46 @@ export function runLeaderboard(options: LeaderboardOptions): number {
   fs.mkdirSync(outDir, { recursive: true });
   const dataPath = path.join(outDir, "data.json");
   const htmlPath = path.join(outDir, "index.html");
+  const llmsPath = path.join(outDir, "llms.txt");
+  const bountiesOutPath = path.join(outDir, "bounties.json");
   fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), "utf8");
   fs.writeFileSync(htmlPath, renderHtml(data), "utf8");
+  fs.writeFileSync(llmsPath, generateLlmsTxt(data), "utf8");
+  fs.writeFileSync(
+    bountiesOutPath,
+    JSON.stringify({ spec_version: "0.1", updated_at: data.generated_at, bounties }, null, 2),
+    "utf8"
+  );
+
+  const skillSrc = locateSkillFile();
+  const skillOutPath = path.join(outDir, "SKILL.md");
+  if (skillSrc) {
+    fs.copyFileSync(skillSrc, skillOutPath);
+  }
 
   if (options.json) {
-    console.log(JSON.stringify({ outDir, dataPath, htmlPath, summary: data.summary }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          outDir,
+          dataPath,
+          htmlPath,
+          llmsPath,
+          bountiesOutPath,
+          skillOutPath: skillSrc ? skillOutPath : null,
+          summary: data.summary,
+        },
+        null,
+        2
+      )
+    );
     return 0;
   }
 
-  printHeader(`Generated Knuth-Style Coding Agent Colloquium (${entries.length} task(s))`);
-  printPass(`Data manifest: ${path.relative(process.cwd(), dataPath)}`);
-  printPass(`Board site:    ${path.relative(process.cwd(), htmlPath)}`);
-  printInfo(`Models tracked: ${data.agent_leaderboard.map((a) => a.agent).join(", ") || "none"}`);
+  printHeader(`Generated Single-KPI Knuth Colloquium (${entries.length} task(s))`);
+  printPass(`Board site:  ${path.relative(process.cwd(), htmlPath)}`);
+  printPass(`Agent guide: ${path.relative(process.cwd(), llmsPath)}`);
+  printInfo(`Primary KPI: ${data.kpi.name}`);
   console.log("");
   return 0;
 }

@@ -1,8 +1,16 @@
 {
-  "generated_at": "2026-11-27T06:59:43.245Z",
+  "generated_at": "2026-11-27T07:29:25.086Z",
   "title": "The Art of Frontier Evaluation",
   "repo_url": "https://github.com/abhilashi/evalkit",
   "github_repo": "abhilashi/evalkit",
+  "kpi": {
+    "name": "Stump Rate",
+    "definition": "Percentage of verified frontier coding-agent trials that fail on a deterministic offline eval (oracle passes 3/3).",
+    "verified_evals": 3,
+    "frontier_trials": 0,
+    "frontier_stumped": 0,
+    "stump_rate_pct": null
+  },
   "summary": {
     "total_tasks": 3,
     "verified_tasks": 3,
@@ -45,7 +53,7 @@
       "spec_version": "0.1",
       "id": "jwt-session-rotation-race",
       "visibility": "blind",
-      "published_at": "2026-11-27T06:59:43.235Z",
+      "published_at": "2026-11-27T07:29:25.076Z",
       "agent_alias": "evalkit-core",
       "agent_rig": "evalkit-harness · node-test",
       "stack": [
@@ -213,7 +221,7 @@
       "spec_version": "0.1",
       "id": "rate-limiter-sliding-window",
       "visibility": "blind",
-      "published_at": "2026-11-27T06:59:43.240Z",
+      "published_at": "2026-11-27T07:29:25.081Z",
       "agent_alias": "evalkit-core",
       "agent_rig": "evalkit-harness · node-test",
       "stack": [
@@ -381,7 +389,7 @@
       "spec_version": "0.1",
       "id": "stripe-webhook-idempotency",
       "visibility": "blind",
-      "published_at": "2026-11-27T06:59:43.245Z",
+      "published_at": "2026-11-27T07:29:25.086Z",
       "agent_alias": "evalkit-core",
       "agent_rig": "evalkit-harness · node-test",
       "stack": [

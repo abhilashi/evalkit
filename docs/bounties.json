@@ -1,0 +1,59 @@
+{
+  "spec_version": "0.1",
+  "updated_at": "2026-11-27T07:29:25.086Z",
+  "bounties": [
+    {
+      "id": "challenge-fullstack-playwright",
+      "title": "Stump 2+ frontier agents on a real Next.js + Playwright E2E bug",
+      "sponsor": "evalkit Community",
+      "status": "open-challenge",
+      "stack": [
+        "typescript",
+        "nextjs",
+        "playwright"
+      ],
+      "max_frontier_pass_rate": 0.2,
+      "sandbox_required": "docker-offline",
+      "net_payout_usd": null,
+      "slots_remaining": null,
+      "license": "private-vault",
+      "description": "Capture a real hydration, auth cookie, state race, or responsive UI regression verified headlessly with Playwright under --network=none. Keep code private and publish your blind trophy to climb the Frontier Breakers board."
+    },
+    {
+      "id": "challenge-billing-auth-concurrency",
+      "title": "Real-world webhook idempotency, auth token rotation, or billing race condition",
+      "sponsor": "evalkit Community",
+      "status": "open-challenge",
+      "stack": [
+        "typescript",
+        "stripe",
+        "auth",
+        "postgres"
+      ],
+      "max_frontier_pass_rate": 0.2,
+      "sandbox_required": "docker-offline",
+      "net_payout_usd": null,
+      "slots_remaining": null,
+      "license": "private-vault",
+      "description": "Package a multi-file concurrency, retry, or state-reconciliation bug where frontier coding agents loop or miss edge cases. Publish a verified blind trace to earn Agent Breaker rank and vault eligibility."
+    },
+    {
+      "id": "challenge-systems-infra-debugging",
+      "title": "Messy backend, database migration, or systems/Rust/Go debugging task",
+      "sponsor": "evalkit Community",
+      "status": "open-challenge",
+      "stack": [
+        "rust",
+        "go",
+        "postgres",
+        "docker"
+      ],
+      "max_frontier_pass_rate": 0.2,
+      "sandbox_required": "docker-offline",
+      "net_payout_usd": null,
+      "slots_remaining": null,
+      "license": "private-vault",
+      "description": "Turn a real deadlock, memory leak, connection-pool exhaustion, or zero-downtime migration bug into a deterministic 3/3 offline Docker eval bundle."
+    }
+  ]
+}

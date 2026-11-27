@@ -470,6 +470,9 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     assert.equal(boardData.entries[0].visibility, "blind");
     assert.equal(boardData.entries[0].prompt_markdown, undefined);
     assert.equal(fs.existsSync(path.join(leaderboardOut, "index.html")), true);
+    assert.equal(fs.existsSync(path.join(leaderboardOut, "llms.txt")), true);
+    assert.equal(fs.existsSync(path.join(leaderboardOut, "SKILL.md")), true);
+    assert.equal(fs.existsSync(path.join(leaderboardOut, "bounties.json")), true);
 
     // 10. SUBMIT dry-run + live local HTTP intake test
     const drySubmit = runCli(["submit", bundleDir, "--dry-run", "--json"]);
