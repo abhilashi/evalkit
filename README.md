@@ -8,7 +8,7 @@
 
 When AI generates most of the code, **the frontier failure boundary is the dataset**: the exact moments where coding agents loop, break regressions, or fail on messy real-world apps and a developer has to step in.
 
-`evalkit` pairs an **open-source CLI** with a **universal Agent Skill (`SKILL.md`)** so any developer can package a real commit range — live right after fixing a gnarly bug, or mined from a side-project graveyard — into an offline-reproducible, leak-free, 3x-verified eval bundle, benchmark coding agents against it, publish a static leaderboard, or submit a blind scorecard to the Private Vault.
+`evalkit` pairs an **open-source CLI** with a **universal Agent Skill (`SKILL.md`)** so any developer can package a real commit range (either live right after fixing a gnarly bug, or mined from a side-project graveyard) into an offline-reproducible, leak-free, 3x-verified eval bundle, benchmark coding agents against it, publish a static leaderboard, or submit a blind scorecard to the Private Vault.
 
 👉 **Live Teaser Leaderboard:** https://abhilashi.github.io/evalkit/
 
@@ -81,7 +81,7 @@ evalkit verify ./evals/webhook-race --mode local --runs 3
 ```
 
 ### 5. Benchmark coding agents on your task
-Run installed coding agents (or any custom command) inside an isolated copy of `base_commit` — with `grading/` and `private/` strictly hidden — then grade every produced patch offline:
+Run installed coding agents (or any custom command) inside an isolated copy of `base_commit` with `grading/` and `private/` strictly hidden, then grade every produced patch offline:
 
 ```bash
 # Built-in adapters: claude, codex, gemini, opencode, oracle, noop
@@ -94,7 +94,7 @@ evalkit bench ./evals/webhook-race \
 ```
 
 ### 6. Estimate Signal Score & indicative market value
-Compute a transparent `0–100` Signal Score, Tier (`S` / `A` / `B` / `C` / `UNBENCHMARKED` / `NOT_ELIGIBLE`), indicative RL-environment market range, and concrete upgrade hints:
+Compute a transparent `0-100` Signal Score, Tier (`S` / `A` / `B` / `C` / `UNBENCHMARKED` / `NOT_ELIGIBLE`), indicative RL-environment market range, and concrete upgrade hints:
 
 ```bash
 evalkit estimate ./evals/webhook-race
@@ -103,13 +103,13 @@ evalkit estimate ./evals/webhook-race
 | Tier | Indicative Range* | Requirements |
 | :--- | :--- | :--- |
 | **UNBENCHMARKED** | _Run frontier bench_ | Verified, but only `noop`/`oracle` baselines run so far |
-| **NOT ELIGIBLE** | **$0** | Unverified or frontier models pass ≥ 80% |
-| **Tier C** | **$50 – $150** | Verified, frontier pass rate 40–79% |
-| **Tier B** | **$150 – $450** | Score ≥ 50, frontier pass rate < 40% |
-| **Tier A** | **$450 – $1,200** | Score ≥ 70, Docker `--network=none` verified, frontier pass rate < 20% |
-| **Tier S** | **$1,200 – $3,000** | Score ≥ 85, Docker `--network=none`, `private-vault`, 0% pass across 2+ frontier models (or 3+ trials) |
+| **NOT ELIGIBLE** | **$0** | Unverified or frontier models pass >= 80% |
+| **Tier C** | **$50 - $150** | Verified, frontier pass rate 40-79% |
+| **Tier B** | **$150 - $450** | Score >= 50, frontier pass rate < 40% |
+| **Tier A** | **$450 - $1,200** | Score >= 70, Docker `--network=none` verified, frontier pass rate < 20% |
+| **Tier S** | **$1,200 - $3,000** | Score >= 85, Docker `--network=none`, `private-vault`, 0% pass across 2+ frontier models (or 3+ trials) |
 
-_\*Indicative market estimates based on current RL-environment & SWE-eval benchmarks — not guaranteed payouts. Actual vault payouts depend on buyer match and server-side QA._
+_\*Indicative market estimates based on current RL-environment & SWE-eval benchmarks (not guaranteed payouts). Actual vault payouts depend on buyer match and server-side QA._
 
 ### 7. Pack into a vault-ready archive + Blind Scorecard (`card.json`)
 Enforces `audit` + fresh verification checksum + IP ownership attestation, automatically embeds matching benchmark scores and valuation into `card.json`, and outputs `<id>.evalkit.tar.gz`:
@@ -177,7 +177,7 @@ A minimal Cloudflare Worker + R2 intake endpoint ships in [`vault-worker/`](vaul
 - **v0.1 (Shipped):** Universal Agent Skill + CLI + Open Bundle Spec + secret/leak auditing + offline Docker/local verification + Blind Scorecard (`card.json`).
 - **v0.2 (Shipped):** `evalkit bench` multi-agent runner (`claude`, `codex`, `gemini`, `opencode`, `--cmd`), auto-embedded benchmark scores in `card.json`, GitHub Actions CI, and 1-command `npx` install.
 - **v0.3 (Shipped):** Verified showcase evals (`examples/`), `evalkit leaderboard` static GitHub Pages generator (`docs/`), `evalkit submit` (dry-run, `--github-issue` blind card, HTTPS vault API), and deployable Cloudflare Worker intake (`vault-worker/`).
-- **v0.4 (Shipped):** Transparent Signal Score (`0–100`), Tier (`S`/`A`/`B`/`C`), indicative market valuation estimator (`evalkit estimate`), embedded into `card.json` and the live leaderboard.
+- **v0.4 (Shipped):** Transparent Signal Score (`0-100`), Tier (`S`/`A`/`B`/`C`), indicative market valuation estimator (`evalkit estimate`), embedded into `card.json` and the live leaderboard.
 
 ---
 
