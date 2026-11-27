@@ -120,8 +120,7 @@ export interface BenchTrialResult {
 export interface PublishedTraceEntry {
   spec_version: string;
   id: string;
-  title?: string;
-  visibility: "public" | "redacted";
+  visibility: "blind";
   published_at: string;
   author?: string;
   stack: string[];
@@ -141,8 +140,6 @@ export interface PublishedTraceEntry {
   valuation?: BundleValuation;
   bundle_sha256: string;
   license: string;
-  prompt_markdown?: string;
-  debrief_summary?: string;
   agents: Array<{
     agent: string;
     passed: number;
@@ -160,9 +157,6 @@ export interface PublishedTraceEntry {
       insertions: number;
       deletions: number;
       failure_class: string;
-      solve_output_tail?: string;
-      grade_output_tail?: string;
-      patch_preview?: string;
     }>;
   }>;
 }

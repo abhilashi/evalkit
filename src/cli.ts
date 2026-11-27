@@ -32,8 +32,8 @@ ${c.bold("COMMANDS")}
   ${c.cyan("bench")}          Benchmark coding agents (claude, codex, gemini, custom) on a bundle
   ${c.cyan("estimate")}       Compute Signal Score (0–100), Tier, and indicative market value range
   ${c.cyan("pack")}           Validate, attest IP ownership, generate blind scorecard (card.json) + .tar.gz
-  ${c.cyan("leaderboard")}    Generate the interactive Community Trace & Eval Board (HTML + JSON)
-  ${c.cyan("publish")}        Publish a public or redacted failure trace to the live board / Gist
+  ${c.cyan("leaderboard")}    Generate the interactive Blind Trace Board (HTML + JSON)
+  ${c.cyan("publish")}        Publish a strict blind trace (zero code/prompts) to the live board / Gist
   ${c.cyan("submit")}         Submit a blind scorecard (or full bundle) to the Private Vault or GitHub
 
 ${c.bold("EXAMPLES")}
@@ -347,9 +347,6 @@ async function main(): Promise<void> {
           args: subArgs,
           allowPositionals: true,
           options: {
-            public: { type: "boolean", default: false },
-            redacted: { type: "boolean", default: false },
-            "force-public": { type: "boolean", default: false },
             board: { type: "boolean", default: false },
             "board-repo": { type: "string", default: "abhilashi/evalkit" },
             gist: { type: "boolean", default: false },
@@ -362,20 +359,13 @@ async function main(): Promise<void> {
         });
         if (values.help || !positionals[0]) {
           console.log(
-            "Usage: evalkit publish <bundle-dir> [--board] [--board-repo owner/repo] [--gist] [--out trace.json|md] [--public|--redacted] [--force-public] [--author handle] [--dry-run] [--json]"
+            "Usage: evalkit publish <bundle-dir> [--board] [--board-repo owner/repo] [--gist] [--out trace.json|md] [--author handle] [--dry-run] [--json]"
           );
           process.exitCode = values.help ? 0 : 1;
           return;
         }
-        const visibility = values.public
-          ? "public"
-          : values.redacted
-            ? "redacted"
-            : undefined;
         exitCode = runPublish({
           bundleDir: positionals[0],
-          visibility,
-          forcePublic: values["force-public"],
           board: values.board,
           boardRepo: values["board-repo"],
           gist: values.gist,

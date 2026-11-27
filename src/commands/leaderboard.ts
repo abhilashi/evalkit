@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
-import type { BlindCard, EvalConfig, PublishedTraceEntry } from "../types.js";
+import type { BlindCard, PublishedTraceEntry } from "../types.js";
 import { buildPublishedTrace } from "./publish.js";
 import { printHeader, printInfo, printPass, printWarn } from "../utils/format.js";
 
@@ -21,8 +20,6 @@ export interface BoardData {
   summary: {
     total_tasks: number;
     verified_tasks: number;
-    public_traces: number;
-    redacted_traces: number;
     stacks: string[];
     categories: string[];
   };
@@ -42,11 +39,54 @@ function parseGithubRepoSlug(repoUrl: string): string {
   return m ? m[1] : "abhilashi/evalkit";
 }
 
+function stripToBlindEntry(raw: Partial<PublishedTraceEntry>): PublishedTraceEntry | null {
+  if (!raw?.id || !raw?.bundle_sha256 || !Array.isArray(raw?.stack)) return null;
+  return {
+    spec_version: raw.spec_version ?? "0.1",
+    id: raw.id,
+    visibility: "blind",
+    published_at: raw.published_at ?? new Date().toISOString(),
+    ...(raw.author ? { author: raw.author } : {}),
+    stack: raw.stack,
+    category: raw.category ?? "bugfix",
+    complexity: raw.complexity ?? { files_changed: 0, insertions: 0, deletions: 0 },
+    verification: raw.verification ?? {
+      verified: false,
+      sandbox: "unverified",
+      network_isolated: false,
+      gold_pass_rate: "0/0",
+      verified_at: null,
+    },
+    ...(raw.valuation ? { valuation: raw.valuation } : {}),
+    bundle_sha256: raw.bundle_sha256,
+    license: raw.license ?? "private-vault",
+    agents: (raw.agents ?? []).map((a) => ({
+      agent: a.agent,
+      passed: a.passed,
+      trials: a.trials,
+      pass_rate: a.pass_rate,
+      avg_solve_ms: a.avg_solve_ms,
+      avg_insertions: a.avg_insertions ?? 0,
+      avg_deletions: a.avg_deletions ?? 0,
+      trials_detail: (a.trials_detail ?? []).map((t) => ({
+        trial: t.trial,
+        passed: t.passed,
+        solve_duration_ms: t.solve_duration_ms,
+        grade_duration_ms: t.grade_duration_ms,
+        files_changed: t.files_changed,
+        insertions: t.insertions,
+        deletions: t.deletions,
+        failure_class: t.failure_class,
+      })),
+    })),
+  };
+}
+
 function cardToTraceEntry(card: BlindCard): PublishedTraceEntry {
   return {
     spec_version: card.spec_version,
     id: card.id,
-    visibility: "redacted",
+    visibility: "blind",
     published_at: card.packed_at,
     stack: card.stack,
     category: card.category,
@@ -74,10 +114,7 @@ function loadEntryFromDir(bundleDir: string): PublishedTraceEntry | null {
 
   if (fs.existsSync(evalYamlPath)) {
     try {
-      const cfg = YAML.parse(fs.readFileSync(evalYamlPath, "utf8")) as EvalConfig;
-      const visibility =
-        cfg.ownership?.license === "private-vault" ? "redacted" : "public";
-      return buildPublishedTrace(bundleDir, visibility);
+      return buildPublishedTrace(bundleDir);
     } catch {
       // fallback to card.json
     }
@@ -108,17 +145,15 @@ function collectEntries(rootDir: string): PublishedTraceEntry[] {
     if (loaded) entries.push(loaded);
   }
 
-  // Also load any standalone *.json PublishedTraceEntry files under board/entries if present
   for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
     if (entry.name === "card.json" || entry.name === "data.json") continue;
     try {
       const parsed = JSON.parse(
         fs.readFileSync(path.join(rootDir, entry.name), "utf8")
-      ) as PublishedTraceEntry;
-      if (parsed?.id && parsed?.bundle_sha256) {
-        entries.push(parsed);
-      }
+      ) as Partial<PublishedTraceEntry>;
+      const blind = stripToBlindEntry(parsed);
+      if (blind) entries.push(blind);
     } catch {
       // ignore non-trace json
     }
@@ -179,8 +214,6 @@ function aggregateBoard(
     summary: {
       total_tasks: entries.length,
       verified_tasks: entries.filter((e) => e.verification?.verified).length,
-      public_traces: entries.filter((e) => e.visibility === "public").length,
-      redacted_traces: entries.filter((e) => e.visibility === "redacted").length,
       stacks: Array.from(stackSet).sort(),
       categories: Array.from(categorySet).sort(),
     },
@@ -230,8 +263,8 @@ function renderHtml(data: BoardData): string {
     }
     .brand {
       display: inline-flex; align-items: center; gap: 8px;
-      font-family: var(--mono); font-size: 12px; color: var(--accent);
-      background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);
+      font-family: var(--mono); font-size: 12px; color: var(--purple);
+      background: rgba(167, 139, 250, 0.12); border: 1px solid rgba(167, 139, 250, 0.28);
       padding: 4px 10px; border-radius: 999px; margin-bottom: 10px;
     }
     h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; }
@@ -312,7 +345,6 @@ function renderHtml(data: BoardData): string {
     .badge.warn { background: rgba(251, 191, 36, 0.14); color: var(--amber); }
     .badge.fail { background: rgba(248, 113, 113, 0.14); color: var(--red); }
     .badge.vault { background: rgba(167, 139, 250, 0.15); color: var(--purple); }
-    .badge.pub { background: rgba(56, 189, 248, 0.14); color: var(--accent); }
     .codebox {
       background: #06090e; border: 1px solid var(--border); border-radius: 10px;
       padding: 13px 15px; font-family: var(--mono); font-size: 12.5px;
@@ -324,14 +356,13 @@ function renderHtml(data: BoardData): string {
       font-size: 11px; color: var(--muted);
     }
     .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block; }
-    /* Modal Trace Inspector */
     .modal-backdrop {
       position: fixed; inset: 0; background: rgba(4, 7, 12, 0.78);
       backdrop-filter: blur(4px); display: none; justify-content: flex-end; z-index: 50;
     }
     .modal-backdrop.open { display: flex; }
     .drawer {
-      width: min(760px, 100vw); height: 100vh; overflow-y: auto;
+      width: min(720px, 100vw); height: 100vh; overflow-y: auto;
       background: #0d121c; border-left: 1px solid var(--border);
       padding: 24px 24px 60px; box-shadow: -12px 0 40px rgba(0,0,0,0.5);
     }
@@ -349,7 +380,7 @@ function renderHtml(data: BoardData): string {
     }
     .trial-head {
       display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-      font-family: var(--mono); font-size: 12px; margin-bottom: 8px;
+      font-family: var(--mono); font-size: 12px;
     }
     .val-grid { display: grid; gap: 8px; }
     .val-row {
@@ -374,16 +405,16 @@ function renderHtml(data: BoardData): string {
   <div class="wrap">
     <header>
       <div>
-        <div class="brand">evalkit · Community Trace &amp; Eval Board</div>
+        <div class="brand">evalkit · Blind Trace Board (Zero Code Exposed)</div>
         <h1 id="title"></h1>
         <p class="subtitle">
-          Click any task to inspect agent failure traces, Signal Score breakdown, and verification proof.
-          Open-source bundles publish full traces; Private Vault entries publish redacted blind telemetry only.
+          Strict blind-trace board for uncontaminated coding evals. Every entry publishes only verified execution telemetry,
+          failure classes, and Signal Scores (never source code, prompts, diffs, or raw stdout).
         </p>
       </div>
       <div class="actions">
         <a class="btn" id="repoLink" href="#" target="_blank" rel="noreferrer">GitHub Repo</a>
-        <a class="btn primary" href="#publish">Publish Your Trace</a>
+        <a class="btn primary" href="#publish">Publish Blind Trace</a>
       </div>
     </header>
 
@@ -399,12 +430,12 @@ function renderHtml(data: BoardData): string {
 
     <section class="panel">
       <h2>
-        <span>Published Evals &amp; Failure Traces</span>
+        <span>Published Blind Traces</span>
         <span class="muted mono" id="taskCount"></span>
       </h2>
 
       <div class="toolbar">
-        <div class="tabs" id="visTabs"></div>
+        <div class="tabs" id="srcTabs"></div>
         <div class="controls">
           <input type="search" id="searchInput" placeholder="Search id, stack, author..." />
           <select id="sortSelect">
@@ -420,25 +451,25 @@ function renderHtml(data: BoardData): string {
       <table>
         <thead>
           <tr>
-            <th>Eval / Visibility</th>
+            <th>Eval ID</th>
             <th>Stack</th>
             <th>Complexity</th>
             <th>Oracle Proof</th>
-            <th>Agent Traces</th>
+            <th>Blind Agent Traces</th>
             <th>Signal / Est. Value</th>
           </tr>
         </thead>
         <tbody id="taskBody"></tbody>
       </table>
       <p class="muted" style="margin:14px 0 0;font-size:12px">
-        * Click any row to inspect the full or redacted failure trace. Dollar ranges are indicative RL-environment market estimates, not guaranteed payouts.
+        * Click any row to inspect blind trial telemetry and request Private Vault access. Dollar ranges are indicative RL-environment market estimates, not guaranteed payouts.
       </p>
     </section>
 
     <section class="panel" id="publish">
-      <h2>Publish Your Own Eval Trace to This Board</h2>
+      <h2>Publish a Blind Trace to This Board</h2>
       <p class="muted" style="margin-top:0">
-        Anyone can publish directly from their terminal. Private Vault bundles default to <code>--redacted</code> (zero code or prompts leave your machine); open-source bundles publish interactive traces.
+        <code>evalkit publish</code> strictly strips source code, prompts, diffs, and stdout so your eval remains uncontaminated while appearing live on this board.
       </p>
       <div class="codebox">npx github:abhilashi/evalkit install-skill --target auto
 evalkit init --repo . --from HEAD~1 --to HEAD --out ./evals/my-bug
@@ -457,8 +488,8 @@ evalkit publish ./evals/my-bug --board</div>
 
   <script>
     const STATIC_DATA = ${embeddedJson};
-    let ALL_ENTRIES = STATIC_DATA.entries.map((e) => ({ ...e, _source: "verified-showcase" }));
-    let activeVis = "all";
+    let ALL_ENTRIES = STATIC_DATA.entries.map((e) => ({ ...e, _source: "showcase" }));
+    let activeSrc = "all";
     let activeStack = "all";
     let searchQuery = "";
     let sortBy = "score";
@@ -487,7 +518,7 @@ evalkit publish ./evals/my-bug --board</div>
 
     function getFrontierPassRate(entry) {
       const frontier = (entry.agents || []).filter((a) => a.agent !== "noop" && a.agent !== "oracle" && a.trials > 0);
-      if (frontier.length === 0) return 2; // sort unbenchmarked after hardest
+      if (frontier.length === 0) return 2;
       const passed = frontier.reduce((s, a) => s + a.passed, 0);
       const trials = frontier.reduce((s, a) => s + a.trials, 0);
       return trials > 0 ? passed / trials : 2;
@@ -520,15 +551,15 @@ evalkit publish ./evals/my-bug --board</div>
       const agents = computeAgentSummary(ALL_ENTRIES);
 
       document.getElementById("stats").innerHTML = [
-        ["Published Evals", ALL_ENTRIES.length],
+        ["Blind Traces", ALL_ENTRIES.length],
         ["Verified Bundles", verified + "/" + ALL_ENTRIES.length],
-        ["Public / Vault", ALL_ENTRIES.filter((e) => e.visibility === "public").length + " / " + ALL_ENTRIES.filter((e) => e.visibility === "redacted").length],
-        ["Stacks Covered", stacks.size]
+        ["Stacks Covered", stacks.size],
+        ["Agents Tracked", agents.length]
       ].map(([l, v]) => '<div class="stat-card"><div class="stat-label">' + esc(l) + '</div><div class="stat-val">' + esc(v) + '</div></div>').join("");
 
       const barsEl = document.getElementById("agentBars");
       if (agents.length === 0) {
-        barsEl.innerHTML = '<p class="muted">No benchmark traces recorded yet.</p>';
+        barsEl.innerHTML = '<p class="muted">No blind benchmark traces recorded yet.</p>';
       } else {
         barsEl.innerHTML = agents.map((a) => {
           const pct = Math.round(a.rate * 100);
@@ -542,19 +573,18 @@ evalkit publish ./evals/my-bug --board</div>
     }
 
     function renderFilters() {
-      const visOptions = [
-        ["all", "All (" + ALL_ENTRIES.length + ")"],
-        ["public", "Public Traces"],
-        ["redacted", "Private Vault (Redacted)"],
+      const srcOptions = [
+        ["all", "All Blind Traces (" + ALL_ENTRIES.length + ")"],
+        ["showcase", "Verified Showcase"],
         ["community", "Community Published"]
       ];
-      const visEl = document.getElementById("visTabs");
-      visEl.innerHTML = visOptions.map(([k, label]) =>
-        '<button class="chip ' + (activeVis === k ? "active" : "") + '" data-vis="' + k + '">' + esc(label) + '</button>'
+      const srcEl = document.getElementById("srcTabs");
+      srcEl.innerHTML = srcOptions.map(([k, label]) =>
+        '<button class="chip ' + (activeSrc === k ? "active" : "") + '" data-src="' + k + '">' + esc(label) + '</button>'
       ).join("");
-      visEl.querySelectorAll("button").forEach((btn) => {
+      srcEl.querySelectorAll("button").forEach((btn) => {
         btn.addEventListener("click", () => {
-          activeVis = btn.getAttribute("data-vis");
+          activeSrc = btn.getAttribute("data-src");
           renderFilters();
           renderTable();
         });
@@ -578,9 +608,8 @@ evalkit publish ./evals/my-bug --board</div>
 
     function renderTable() {
       let list = ALL_ENTRIES.slice();
-      if (activeVis === "public") list = list.filter((e) => e.visibility === "public");
-      if (activeVis === "redacted") list = list.filter((e) => e.visibility === "redacted");
-      if (activeVis === "community") list = list.filter((e) => e._source === "community");
+      if (activeSrc === "showcase") list = list.filter((e) => e._source === "showcase");
+      if (activeSrc === "community") list = list.filter((e) => e._source === "community");
       if (activeStack !== "all") list = list.filter((e) => (e.stack || []).includes(activeStack));
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -600,17 +629,14 @@ evalkit publish ./evals/my-bug --board</div>
         list.sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || "")));
       }
 
-      document.getElementById("taskCount").textContent = list.length + " task(s)";
+      document.getElementById("taskCount").textContent = list.length + " blind trace(s)";
       const tbody = document.getElementById("taskBody");
       if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="muted">No matching eval traces.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="muted">No matching blind traces.</td></tr>';
         return;
       }
 
       tbody.innerHTML = list.map((t) => {
-        const visBadge = t.visibility === "public"
-          ? '<span class="badge pub">PUBLIC TRACE</span>'
-          : '<span class="badge vault">VAULT · REDACTED</span>';
         const srcBadge = t._source === "community"
           ? ' <span class="badge warn">@' + esc(t.author || "community") + '</span>'
           : '';
@@ -636,7 +662,7 @@ evalkit publish ./evals/my-bug --board</div>
         }
 
         return '<tr data-id="' + esc(t.id) + '">' +
-          '<td><div class="mono"><strong>' + esc(t.id) + '</strong></div><div style="margin-top:4px">' + visBadge + srcBadge + '</div></td>' +
+          '<td><div class="mono"><strong>' + esc(t.id) + '</strong></div><div style="margin-top:4px"><span class="badge vault">BLIND TRACE</span>' + srcBadge + '</div></td>' +
           '<td>' + stacks + '</td>' +
           '<td class="mono">' + (t.complexity ? t.complexity.files_changed : 0) + ' files<div class="muted" style="font-size:11px">+' + (t.complexity ? t.complexity.insertions : 0) + ' / -' + (t.complexity ? t.complexity.deletions : 0) + '</div></td>' +
           '<td>' + vBadge + sandboxNote + '</td>' +
@@ -692,37 +718,14 @@ evalkit publish ./evals/my-bug --board</div>
         } else {
           trialsHtml = details.map((tr) => {
             const cls = tr.passed ? "ok" : "fail";
-            let extra = '';
-            if (entry.visibility === "public") {
-              if (tr.solve_output_tail) {
-                extra += '<div class="muted mono" style="font-size:11px;margin:8px 0 4px">Agent Solve Output</div><div class="codebox">' + esc(tr.solve_output_tail) + '</div>';
-              }
-              if (tr.grade_output_tail) {
-                extra += '<div class="muted mono" style="font-size:11px;margin:8px 0 4px">Grading Verifier Output</div><div class="codebox">' + esc(tr.grade_output_tail) + '</div>';
-              }
-              if (tr.patch_preview) {
-                extra += '<div class="muted mono" style="font-size:11px;margin:8px 0 4px">Produced Diff</div><div class="codebox">' + esc(tr.patch_preview) + '</div>';
-              }
-            } else {
-              extra = '<div class="muted" style="font-size:12px">Redacted Vault Trace: code diffs &amp; stdout withheld to prevent holdout contamination.</div>';
-            }
             return '<div class="trial-card">' +
               '<div class="trial-head">' +
               '<div><span class="badge ' + cls + '">' + esc(tr.failure_class || (tr.passed ? "PASS" : "FAIL")) + '</span> Trial #' + tr.trial + '</div>' +
               '<div class="muted">solve ' + fmtMs(tr.solve_duration_ms) + ' · grade ' + fmtMs(tr.grade_duration_ms) + ' · ' + tr.files_changed + ' files (+' + tr.insertions + '/-' + tr.deletions + ')</div>' +
-              '</div>' + extra + '</div>';
+              '</div></div>';
           }).join("");
         }
       }
-
-      const publicDocs = entry.visibility === "public" ? (
-        (entry.prompt_markdown ? '<div class="section-title">Task Prompt (Shown to Agent)</div><div class="codebox">' + esc(entry.prompt_markdown) + '</div>' : '') +
-        (entry.debrief_summary ? '<div class="section-title">Author Debrief</div><div class="codebox">' + esc(entry.debrief_summary) + '</div>' : '')
-      ) : (
-        '<div class="section-title">Private Vault Holdout</div>' +
-        '<div class="trial-card"><p class="muted" style="margin:0 0 10px">Prompt, source snapshot, hidden tests, and gold patch stay strictly private to keep this environment uncontaminated.</p>' +
-        '<a class="btn primary" href="' + esc(buyUrl) + '" target="_blank" rel="noreferrer">Request Vault Access / License</a></div>'
-      );
 
       const issueLink = entry._issue_url
         ? '<a class="btn" href="' + esc(entry._issue_url) + '" target="_blank" rel="noreferrer">GitHub Post</a>'
@@ -732,8 +735,9 @@ evalkit publish ./evals/my-bug --board</div>
         '<div class="drawer-head">' +
           '<div>' +
             '<div style="margin-bottom:6px">' +
-              (entry.visibility === "public" ? '<span class="badge pub">PUBLIC TRACE</span>' : '<span class="badge vault">PRIVATE VAULT · REDACTED</span>') +
+              '<span class="badge vault">BLIND TRACE</span>' +
               ' <span class="badge ok">' + esc(entry.category) + '</span>' +
+              ' <span class="badge">' + esc(entry.license || "private-vault") + '</span>' +
             '</div>' +
             '<h2 style="margin:0 0 4px;font-size:20px" class="mono">' + esc(entry.id) + '</h2>' +
             '<div class="muted mono" style="font-size:11px">SHA-256: ' + esc(entry.bundle_sha256) + '</div>' +
@@ -746,9 +750,13 @@ evalkit publish ./evals/my-bug --board</div>
         '</div>' +
         '<div style="margin-bottom:12px">' + (entry.stack || []).map((s) => '<span class="tag">' + esc(s) + '</span>').join("") + '</div>' +
         valBlock +
-        '<div class="section-title">Agent Execution Traces</div>' +
+        '<div class="section-title">Blind Agent Execution Telemetry</div>' +
         agentTabs + trialsHtml +
-        publicDocs;
+        '<div class="section-title">Uncontaminated Holdout Policy</div>' +
+        '<div class="trial-card">' +
+          '<p class="muted" style="margin:0 0 12px">Source snapshot, prompt, hidden verification tests, diffs, and debrief stay strictly private so models cannot train on or memorize this task.</p>' +
+          '<a class="btn primary" href="' + esc(buyUrl) + '" target="_blank" rel="noreferrer">Request Vault Access / License</a>' +
+        '</div>';
 
       document.getElementById("modalBackdrop").classList.add("open");
       document.getElementById("closeDrawerBtn").addEventListener("click", closeDrawer);
@@ -794,18 +802,48 @@ evalkit publish ./evals/my-bug --board</div>
           const match = body.match(/<!-- EVALKIT_BOARD_JSON_START -->\\s*\`\`\`json\\s*([\\s\\S]*?)\\s*\`\`\`\\s*<!-- EVALKIT_BOARD_JSON_END -->/);
           if (!match) continue;
           try {
-            const parsed = JSON.parse(match[1]);
+            const p = JSON.parse(match[1]);
             if (
-              typeof parsed.id === "string" &&
-              typeof parsed.bundle_sha256 === "string" &&
-              /^[a-f0-9]{64}$/i.test(parsed.bundle_sha256) &&
-              Array.isArray(parsed.stack) &&
-              !existingHashes.has(parsed.bundle_sha256)
+              typeof p.id === "string" &&
+              typeof p.bundle_sha256 === "string" &&
+              /^[a-f0-9]{64}$/i.test(p.bundle_sha256) &&
+              Array.isArray(p.stack) &&
+              !existingHashes.has(p.bundle_sha256)
             ) {
-              existingHashes.add(parsed.bundle_sha256);
+              existingHashes.add(p.bundle_sha256);
+              // Defense-in-depth: strictly pick blind telemetry fields only
               ALL_ENTRIES.push({
-                ...parsed,
-                author: parsed.author || (issue.user && issue.user.login) || "community",
+                spec_version: p.spec_version || "0.1",
+                id: p.id,
+                visibility: "blind",
+                published_at: p.published_at || issue.created_at,
+                author: p.author || (issue.user && issue.user.login) || "community",
+                stack: p.stack,
+                category: p.category || "bugfix",
+                complexity: p.complexity || { files_changed: 0, insertions: 0, deletions: 0 },
+                verification: p.verification || { verified: false, sandbox: "unverified", network_isolated: false, gold_pass_rate: "0/0", verified_at: null },
+                valuation: p.valuation,
+                bundle_sha256: p.bundle_sha256,
+                license: p.license || "private-vault",
+                agents: (p.agents || []).map((a) => ({
+                  agent: a.agent,
+                  passed: a.passed,
+                  trials: a.trials,
+                  pass_rate: a.pass_rate,
+                  avg_solve_ms: a.avg_solve_ms,
+                  avg_insertions: a.avg_insertions || 0,
+                  avg_deletions: a.avg_deletions || 0,
+                  trials_detail: (a.trials_detail || []).map((t) => ({
+                    trial: t.trial,
+                    passed: t.passed,
+                    solve_duration_ms: t.solve_duration_ms,
+                    grade_duration_ms: t.grade_duration_ms,
+                    files_changed: t.files_changed,
+                    insertions: t.insertions,
+                    deletions: t.deletions,
+                    failure_class: t.failure_class
+                  }))
+                })),
                 _source: "community",
                 _issue_url: issue.html_url
               });
@@ -838,7 +876,7 @@ evalkit publish ./evals/my-bug --board</div>
     document.getElementById("title").textContent = STATIC_DATA.title;
     document.getElementById("repoLink").href = STATIC_DATA.repo_url;
     document.getElementById("footer").textContent =
-      "Generated by evalkit · " + new Date(STATIC_DATA.generated_at).toUTCString();
+      "Generated by evalkit · Blind Trace Board · " + new Date(STATIC_DATA.generated_at).toUTCString();
 
     document.getElementById("searchInput").addEventListener("input", (e) => {
       searchQuery = e.target.value.trim();
@@ -882,7 +920,7 @@ export function runLeaderboard(options: LeaderboardOptions): number {
     return 0;
   }
 
-  printHeader(`Generated Community Trace & Eval Board (${entries.length} task(s))`);
+  printHeader(`Generated Blind Trace Board (${entries.length} task(s))`);
   printPass(`Data manifest: ${path.relative(process.cwd(), dataPath)}`);
   printPass(`Board site:    ${path.relative(process.cwd(), htmlPath)}`);
   printInfo(`Agents tracked: ${data.agent_leaderboard.map((a) => a.agent).join(", ") || "none"}`);

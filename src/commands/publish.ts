@@ -21,8 +21,6 @@ import { c, printHeader, printInfo, printPass, printWarn } from "../utils/format
 
 export interface PublishOptions {
   bundleDir: string;
-  visibility?: "public" | "redacted";
-  forcePublic: boolean;
   board: boolean;
   boardRepo: string;
   gist: boolean;
@@ -32,9 +30,12 @@ export interface PublishOptions {
   json: boolean;
 }
 
+/**
+ * Builds a strictly blind trace entry.
+ * Source code, prompts, diffs, debrief prose, and raw stdout/stderr are NEVER included.
+ */
 export function buildPublishedTrace(
   bundleDir: string,
-  visibility: "public" | "redacted",
   author?: string
 ): PublishedTraceEntry {
   const absDir = path.resolve(bundleDir);
@@ -69,7 +70,6 @@ export function buildPublishedTrace(
   }
   const benchValid = Boolean(benchReport && benchReport.bundle_sha256 === bundleSha);
 
-  // Use card.json valuation if fresh, otherwise compute directly
   let valuation = estimateBundleValue({
     config,
     verifyReport,
@@ -90,9 +90,6 @@ export function buildPublishedTrace(
     }
   }
 
-  const promptPath = path.join(absDir, "prompt.md");
-  const debriefPath = path.join(absDir, "private", "debrief.md");
-
   const agents = (benchValid && benchReport ? benchReport.agents : []).map((a) => ({
     agent: a.agent,
     passed: a.passed,
@@ -110,22 +107,13 @@ export function buildPublishedTrace(
       insertions: r.insertions,
       deletions: r.deletions,
       failure_class: r.failure_class ?? (r.passed ? "PASS" : "TEST_FAILURE"),
-      // Only include raw logs and code diffs when visibility === "public"
-      ...(visibility === "public"
-        ? {
-            solve_output_tail: r.solve_output_tail ?? "",
-            grade_output_tail: r.output_tail ?? "",
-            patch_preview: r.patch_preview ?? "",
-          }
-        : {}),
     })),
   }));
 
   return {
     spec_version: config.spec_version,
     id: config.id,
-    ...(visibility === "public" ? { title: config.title } : {}),
-    visibility,
+    visibility: "blind",
     published_at: new Date().toISOString(),
     ...(author ? { author } : {}),
     stack: config.stack,
@@ -148,22 +136,11 @@ export function buildPublishedTrace(
     valuation,
     bundle_sha256: bundleSha,
     license: config.ownership?.license ?? "private-vault",
-    ...(visibility === "public" && fs.existsSync(promptPath)
-      ? { prompt_markdown: fs.readFileSync(promptPath, "utf8") }
-      : {}),
-    ...(visibility === "public" && fs.existsSync(debriefPath)
-      ? { debrief_summary: fs.readFileSync(debriefPath, "utf8") }
-      : {}),
     agents,
   };
 }
 
-function renderTraceMarkdown(entry: PublishedTraceEntry): string {
-  const modeNote =
-    entry.visibility === "redacted"
-      ? "Redacted Blind Trace (zero source code, diffs, or prompts published — safe for Private Vault holdouts)."
-      : "Public Showcase Trace (open-source task with full prompt, agent logs, and diffs).";
-
+function renderBlindTraceMarkdown(entry: PublishedTraceEntry): string {
   const agentRows =
     entry.agents.length > 0
       ? entry.agents
@@ -179,11 +156,11 @@ function renderTraceMarkdown(entry: PublishedTraceEntry): string {
     ? `Tier **${entry.valuation.tier}** (${entry.valuation.score}/100) · ${formatRangeUsd(entry.valuation)}`
     : "_Not estimated_";
 
-  return `## evalkit Trace Card: \`${entry.id}\`
+  return `## evalkit Blind Trace: \`${entry.id}\`
 
-> ${modeNote}
+> Blind Trace only: zero source code, prompts, diffs, or raw stdout are published, keeping this eval uncontaminated.
 
-- **Visibility:** \`${entry.visibility}\`
+- **Visibility:** \`blind\`
 - **Stack:** ${entry.stack.map((s) => `\`${s}\``).join(", ")}
 - **Category:** \`${entry.category}\`
 - **Complexity:** ${entry.complexity.files_changed} file(s), +${entry.complexity.insertions} / -${entry.complexity.deletions}
@@ -191,7 +168,7 @@ function renderTraceMarkdown(entry: PublishedTraceEntry): string {
 - **Signal / Est. Value:** ${valLine}
 - **Bundle SHA-256:** \`${entry.bundle_sha256}\`
 
-### Agent Results
+### Blind Agent Execution Telemetry
 
 | Agent | Pass Rate | Avg Solve | Avg Diff | Outcomes |
 | :--- | :--- | :--- | :--- | :--- |
@@ -211,7 +188,6 @@ export function runPublish(options: PublishOptions): number {
   if (!fs.existsSync(evalYamlPath)) {
     throw new Error(`Missing eval.yaml in ${absDir}`);
   }
-  const config = YAML.parse(fs.readFileSync(evalYamlPath, "utf8")) as EvalConfig;
 
   // Enforce audit gate before publishing anywhere
   const audit = auditBundle(absDir);
@@ -221,24 +197,8 @@ export function runPublish(options: PublishOptions): number {
     );
   }
 
-  // Protect private-vault bundles from accidental public leakage
-  const isPrivateVault = config.ownership?.license === "private-vault";
-  let visibility: "public" | "redacted";
-  if (options.visibility === "public") {
-    if (isPrivateVault && !options.forcePublic) {
-      throw new Error(
-        'Refusing to publish a `private-vault` bundle in --public mode (would contaminate holdout). Use `--redacted` (recommended) or pass `--force-public` if you intend to open-source it.'
-      );
-    }
-    visibility = "public";
-  } else if (options.visibility === "redacted") {
-    visibility = "redacted";
-  } else {
-    visibility = isPrivateVault ? "redacted" : "public";
-  }
-
-  const entry = buildPublishedTrace(absDir, visibility, options.author);
-  const markdown = renderTraceMarkdown(entry);
+  const entry = buildPublishedTrace(absDir, options.author);
+  const markdown = renderBlindTraceMarkdown(entry);
 
   if (options.outFile) {
     const outPath = path.resolve(options.outFile);
@@ -249,7 +209,7 @@ export function runPublish(options: PublishOptions): number {
       fs.writeFileSync(outPath, JSON.stringify(entry, null, 2), "utf8");
     }
     if (!options.json) {
-      printPass(`Wrote trace artifact → ${path.relative(process.cwd(), outPath)}`);
+      printPass(`Wrote blind trace artifact → ${path.relative(process.cwd(), outPath)}`);
     }
   }
 
@@ -257,8 +217,8 @@ export function runPublish(options: PublishOptions): number {
     if (options.json) {
       console.log(JSON.stringify({ dry_run: true, entry }, null, 2));
     } else {
-      printHeader(`Publish preview: ${entry.id} (${entry.visibility})`);
-      printWarn("Dry run — nothing was uploaded.");
+      printHeader(`Blind trace preview: ${entry.id}`);
+      printWarn("Dry run — nothing was uploaded. Zero source code, diffs, or prompts included.");
       printInfo(
         `Agents: ${entry.agents.map((a) => `${a.agent}=${a.passed}/${a.trials}`).join(", ") || "none"}`
       );
@@ -273,7 +233,7 @@ export function runPublish(options: PublishOptions): number {
     if (ghCheck.exitCode !== 0) {
       throw new Error("GitHub CLI (`gh`) is required for --gist publishing.");
     }
-    const tmpFile = path.join(os.tmpdir(), `evalkit-trace-${entry.id}-${Date.now()}.md`);
+    const tmpFile = path.join(os.tmpdir(), `evalkit-blind-trace-${entry.id}-${Date.now()}.md`);
     try {
       fs.writeFileSync(tmpFile, markdown, "utf8");
       const gistRes = execSyncSafe(
@@ -283,7 +243,7 @@ export function runPublish(options: PublishOptions): number {
           "create",
           "--public",
           "--desc",
-          `evalkit ${entry.visibility} trace: ${entry.id}`,
+          `evalkit blind trace: ${entry.id}`,
           tmpFile,
         ],
         { timeoutMs: 30_000 }
@@ -295,7 +255,7 @@ export function runPublish(options: PublishOptions): number {
       if (options.json) {
         console.log(JSON.stringify({ published: true, target: "gist", url: gistUrl, entry }, null, 2));
       } else {
-        printPass(`Published ${entry.visibility} trace Gist → ${gistUrl}`);
+        printPass(`Published blind trace Gist → ${gistUrl}`);
       }
       return 0;
     } finally {
@@ -308,7 +268,7 @@ export function runPublish(options: PublishOptions): number {
     if (ghCheck.exitCode !== 0) {
       throw new Error("GitHub CLI (`gh`) is required for --board publishing.");
     }
-    const title = `[Board] ${entry.id} (${entry.visibility} · ${entry.stack.slice(0, 3).join(", ")})`;
+    const title = `[Board] ${entry.id} (blind · ${entry.stack.slice(0, 3).join(", ")})`;
     const res = execSyncSafe(
       "gh",
       [
@@ -339,7 +299,7 @@ export function runPublish(options: PublishOptions): number {
         )
       );
     } else {
-      printHeader(`Published to evalkit Community Board (${entry.visibility})`);
+      printHeader(`Published blind trace to evalkit Board`);
       printPass(`GitHub Board Issue → ${issueUrl}`);
       printPass(`Live Board Link    → ${boardLink}`);
       console.log("");
@@ -351,7 +311,7 @@ export function runPublish(options: PublishOptions): number {
     if (options.json) {
       console.log(JSON.stringify({ published: false, entry }, null, 2));
     } else {
-      printHeader(`Built ${entry.visibility} trace for ${entry.id}`);
+      printHeader(`Built blind trace for ${entry.id}`);
       printInfo("Pass `--board` (publish to live GitHub Pages board), `--gist` (create shareable Gist), or `--out <file.json|md>` to save locally.");
       console.log("");
     }

@@ -414,12 +414,9 @@ Agents often added a module-level global Set instead of storing processed IDs pe
       2
     );
 
-    // 8. PUBLISH safety checks (private-vault refuses --public without --force-public; defaults to redacted)
-    const pubBlocked = runCli(["publish", bundleDir, "--public", "--dry-run", "--json"]);
-    assert.equal(pubBlocked.status, 1);
-
-    const traceOutPath = path.join(tmpRoot, "trace-redacted.json");
-    const pubRedacted = runCli([
+    // 8. PUBLISH strictly outputs blind trace only (zero code, prompts, diffs, or raw stdout)
+    const traceOutPath = path.join(tmpRoot, "trace-blind.json");
+    const pubBlind = runCli([
       "publish",
       bundleDir,
       "--out",
@@ -427,17 +424,18 @@ Agents often added a module-level global Set instead of storing processed IDs pe
       "--dry-run",
       "--json",
     ]);
-    assert.equal(pubRedacted.status, 0, `${pubRedacted.stdout}\n${pubRedacted.stderr}`);
-    const redactedEntry = JSON.parse(fs.readFileSync(traceOutPath, "utf8"));
-    assert.equal(redactedEntry.visibility, "redacted");
-    assert.equal(redactedEntry.prompt_markdown, undefined);
-    assert.equal(redactedEntry.agents.length, 3);
-    // Ensure redacted trace strips code diffs and raw logs
-    assert.equal(redactedEntry.agents[0].trials_detail[0].patch_preview, undefined);
-    assert.equal(redactedEntry.agents[0].trials_detail[0].grade_output_tail, undefined);
-    assert.ok(redactedEntry.agents[0].trials_detail[0].failure_class);
+    assert.equal(pubBlind.status, 0, `${pubBlind.stdout}\n${pubBlind.stderr}`);
+    const blindEntry = JSON.parse(fs.readFileSync(traceOutPath, "utf8"));
+    assert.equal(blindEntry.visibility, "blind");
+    assert.equal(blindEntry.prompt_markdown, undefined);
+    assert.equal(blindEntry.debrief_summary, undefined);
+    assert.equal(blindEntry.agents.length, 3);
+    assert.equal(blindEntry.agents[0].trials_detail[0].patch_preview, undefined);
+    assert.equal(blindEntry.agents[0].trials_detail[0].solve_output_tail, undefined);
+    assert.equal(blindEntry.agents[0].trials_detail[0].grade_output_tail, undefined);
+    assert.ok(blindEntry.agents[0].trials_detail[0].failure_class);
 
-    // 9. LEADERBOARD generation from packed bundle
+    // 9. LEADERBOARD generation from packed bundle (strictly blind)
     const leaderboardOut = path.join(tmpRoot, "site");
     const lbRes = runCli([
       "leaderboard",
@@ -450,9 +448,10 @@ Agents often added a module-level global Set instead of storing processed IDs pe
     const lbJson = JSON.parse(lbRes.stdout);
     assert.equal(lbJson.summary.total_tasks, 1);
     assert.equal(lbJson.summary.verified_tasks, 1);
-    assert.equal(lbJson.summary.redacted_traces, 1);
+    const boardData = JSON.parse(fs.readFileSync(path.join(leaderboardOut, "data.json"), "utf8"));
+    assert.equal(boardData.entries[0].visibility, "blind");
+    assert.equal(boardData.entries[0].prompt_markdown, undefined);
     assert.equal(fs.existsSync(path.join(leaderboardOut, "index.html")), true);
-    assert.equal(fs.existsSync(path.join(leaderboardOut, "data.json")), true);
 
     // 10. SUBMIT dry-run + live local HTTP intake test
     const drySubmit = runCli(["submit", bundleDir, "--dry-run", "--json"]);
