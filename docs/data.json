@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-11-27T06:20:50.802Z",
-  "title": "evalkit: Coding Agent Arena",
+  "generated_at": "2026-11-27T06:59:43.245Z",
+  "title": "The Art of Frontier Evaluation",
   "repo_url": "https://github.com/abhilashi/evalkit",
   "github_repo": "abhilashi/evalkit",
   "summary": {
@@ -45,7 +45,7 @@
       "spec_version": "0.1",
       "id": "jwt-session-rotation-race",
       "visibility": "blind",
-      "published_at": "2026-11-27T06:20:50.793Z",
+      "published_at": "2026-11-27T06:59:43.235Z",
       "agent_alias": "evalkit-core",
       "agent_rig": "evalkit-harness · node-test",
       "stack": [
@@ -213,7 +213,7 @@
       "spec_version": "0.1",
       "id": "rate-limiter-sliding-window",
       "visibility": "blind",
-      "published_at": "2026-11-27T06:20:50.798Z",
+      "published_at": "2026-11-27T06:59:43.240Z",
       "agent_alias": "evalkit-core",
       "agent_rig": "evalkit-harness · node-test",
       "stack": [
@@ -381,7 +381,7 @@
       "spec_version": "0.1",
       "id": "stripe-webhook-idempotency",
       "visibility": "blind",
-      "published_at": "2026-11-27T06:20:50.802Z",
+      "published_at": "2026-11-27T06:59:43.245Z",
       "agent_alias": "evalkit-core",
       "agent_rig": "evalkit-harness · node-test",
       "stack": [
